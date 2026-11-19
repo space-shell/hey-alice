@@ -85,9 +85,14 @@ mtk_log="$DIR/mtk-$PHASE.log"
 brom_banner() {
   echo "==================================================================="
   echo "$1. On the phone, do the BROM entry:"
-  echo "  1. unplug USB   2. power OFF   3. hold Vol+ and Vol-"
-  echo "  4. plug USB back in, keep holding the keys ~5 seconds"
-  echo "mtkclient is waiting for the device..."
+  echo "  1. if plugged: unplug the USB cable"
+  echo "  2. hold POWER ~10 s until the phone is completely off"
+  echo "     (screen dead — a charging logo on plug-in means it was NOT off)"
+  echo "  3. press and hold Vol+ and Vol− (both, firmly)"
+  echo "  4. plug USB back in while holding both keys — the phone screen"
+  echo "     must stay BLACK; keep holding ~10 s until activity starts here"
+  echo "  5. if the phone shows charging/boot animation: it booted normally;"
+  echo "     unplug, force power off again (hold POWER 10 s), retry step 3"
   echo "==================================================================="
 }
 
@@ -96,7 +101,8 @@ case "$PHASE" in
     brom_banner "PHASE 1 of 2 — READ"
     # --write_preloader_to_file: preloader lives outside the GPT; dump it too.
     # --skip userdata: owner data + 100+ GB, excluded by plan D1.1.
-    if ! mtk rl "$DIR" --skip "$SKIP" --write_preloader_to_file 2>&1 | tee "$mtk_log"; then
+    # --debugmode: VID/PID + handshake detail in the log (first-run diagnosis).
+    if ! mtk --debugmode rl "$DIR" --skip "$SKIP" --write_preloader_to_file 2>&1 | tee "$mtk_log"; then
       echo "WARNING: mtk rl exited nonzero — see $mtk_log" >&2
     fi
     # normalise the preloader dump name (mtkclient writes preloader*.bin)
