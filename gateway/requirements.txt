@@ -1,0 +1,8 @@
+# Voice gateway deps (plan M1/M2). Versions pinned at M1 once the backend
+# decision (ADR-2) is made from the D1.4/D1.5 audit numbers.
+faster-whisper>=1.0
+kokoro>=0.9
+websockets>=13
+numpy
+soundfile
+onnxruntime
