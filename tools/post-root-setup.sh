@@ -22,6 +22,10 @@ DEBLOAT=()
 
 die() { echo "FATAL: $*" >&2; exit 1; }
 log() { echo "[post-root] $*"; }
+# Target discipline: another Android device on this network auto-connects to
+# adb via mDNS/TCP. NEVER issue adb commands without -s <NX1 serial>.
+NX1_SERIAL="${NX1_SERIAL:-TLF2601S000307}"
+adb() { command adb -s "$NX1_SERIAL" "$@"; }
 command -v adb >/dev/null || die "run inside tools devshell: nix develop -c bash $0 $*"
 adb get-state >/dev/null 2>&1 || adb wait-for-device
 

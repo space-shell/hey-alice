@@ -12,6 +12,11 @@
 # Usage: nix develop -c ../tools/verify-root.sh
 set -uo pipefail
 
+# Target discipline: another Android device on this network auto-connects to
+# adb via mDNS/TCP. NEVER issue adb commands without -s <NX1 serial>.
+NX1_SERIAL="${NX1_SERIAL:-TLF2601S000307}"
+adb() { command adb -s "$NX1_SERIAL" "$@"; }
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -22,8 +27,7 @@ failf() { echo "FAIL: $*"; fail=1; }
 command -v adb >/dev/null || { echo "FATAL: run inside tools devshell (nix develop)"; exit 2; }
 
 adb get-state >/dev/null 2>&1 || adb wait-for-device
-state="$(adb get-state 2>/dev/null)"
-[ "$state" = "device" ] && pass "adb device online" || failf "adb state is '$state'"
+state="$(adb get-state 2>/dev/null)"[ "$state" = "device" ] && pass "adb device online" || failf "adb state is '$state'"
 
 boot_completed="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
 [ "$boot_completed" = "1" ] && pass "boot completed" || failf "sys.boot_completed=$boot_completed (bootloop? see tools/README.md → recovery)"

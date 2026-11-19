@@ -28,6 +28,12 @@ confirm() { # confirm <question> — asks unless non-interactive
   [ "$ans" = "UNLOCK" ] || die "aborted by operator"
 }
 
+# Target discipline: another Android device on this network auto-connects to
+# adb via mDNS/TCP. NEVER issue adb commands without -s <NX1 serial>.
+# fastboot is USB-only and single-device here; mtkclient targets BROM by VID.
+NX1_SERIAL="${NX1_SERIAL:-TLF2601S000307}"
+adb() { command adb -s "$NX1_SERIAL" "$@"; }
+
 for tool in adb fastboot; do command -v "$tool" >/dev/null || die "run inside tools devshell: nix develop -c bash $0"; done
 
 # ---------- gate 0: explicit wipe consent ----------

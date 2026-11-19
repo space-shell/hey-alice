@@ -138,4 +138,7 @@ input — capture it in the root session and commit the filtered summary under
 
 | Date | State |
 | --- | --- |
-| 2026-11-19 | toolkit committed; adb blocked on `programs.adb.enable` udev step; backup pending |
+| 2026-11-19 | toolkit committed; backup read phase armed, waiting on owner BROM entry |
+| 2026-11-19 | udev: owner placed `/etc/udev/rules.d/52-mtk.rules` manually (VID `0e8d` → MODE 0666 + uaccess; NX1 adb interface enumerates as `0e8d:201c`). No NixOS rebuild needed for this device — `programs.adb.enable` snippet above applies to standard Google-VID devices only |
+| 2026-11-19 | **wipe consent: owner APPROVED** — phone contents disposable; the unlock-session runbook does not need to re-ask consent (unlock still needs owner physically present, volume-up confirm) |
+| 2026-11-19 | target discipline: an unrelated device (Go103, Android 12) auto-connects to adb via mDNS/TCP on this network → all adb calls in `verify-root.sh` / `unlock-flash.sh` / `post-root-setup.sh` are pinned to `-s TLF2601S000307` (override with `NX1_SERIAL` env). fastboot is USB-only single-device; mtkclient targets BROM by VID |
