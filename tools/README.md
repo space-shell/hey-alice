@@ -101,10 +101,12 @@ gzip-compressed and Google GKI images break WiFi (plan R8, TrebleDroid wiki).
 `tools/unlock-flash.sh` encodes the full gated sequence; do not run it in the
 bring-up run. What it will ask of the owner:
 
-1. wipe consent (it refuses to start without the VERIFIED backup + provenance-
-   recorded patched image + explicit `UNLOCK`/env confirmation)
-2. `adb reboot bootloader` → `fastboot flashing unlock` → **volume-up + power**
-   on the on-screen confirm → device wipes, reboots
+1. wipe consent — **approved by owner 2026-11-19, on record; not re-asked**
+2. `adb reboot bootloader` → `fastboot flashing unlock` → **immediately press
+   VOLUME UP** on the phone (quick press — NX1-verified gesture, not the
+   generic AOSP vol-up-then-power flow) → device wipes, reboots. Without adb:
+   physical early-boot menu (power off → hold POWER **then** VOL UP → 3-option
+   menu → Vol-up navigates, Vol-down confirms → Fastboot)
 3. post-wipe setup: skip the wizard, re-enable Developer options → USB
    debugging + OEM unlocking, accept the RSA prompt
 4. second reboot to bootloader → unlock state verified → `fastboot flash
@@ -132,7 +134,15 @@ input — capture it in the root session and commit the filtered summary under
 
 - TrebleDroid/treble_experimentations wiki — Bluefox NX1 device page
 - bluefox-guide.neocities.org — bootloader unlock, firmware restore, battery saving
-- Firmware payload: not downloaded yet — see `docs/plan.md` D1.1 note; opportunistic extra
+- **Firmware payload** (sourced 2026-11-19, not downloaded — opportunistic extra):
+  community MEGA folder https://mega.nz/folder/FH0FiAob#Z-KiYrb1o4CLwGq7SuGVIA
+  (linked from bluefox-guide downgrade.html). 7z archives per model/region;
+  this device is the **EEA** variant (product `BF001_EEA`, build
+  `T69_S39_BLUEFOX_NX1_C1EEA_20260113`). Archives contain `super.img`,
+  `vbmeta.img`, `boot.img` for fastboot-based restore (guide uses
+  `fastboot flash super super.img` + vbmeta). Fetch with `megatools` (nixpkgs)
+  if ever needed — our mtkclient backup already supersedes it for restore
+  purposes (full per-partition images from the actual device).
 
 ## State log
 
