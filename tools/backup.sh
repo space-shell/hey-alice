@@ -49,6 +49,29 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# The NX1 attached in normal (adb) mode is 0e8d:201c. mtkclient's wait loop
+# matches it and burns handshake attempts against a RUNNING phone forever
+# (observed 2026-11-19: 1000 failures, zero bytes). Refuse to start mtk while
+# the phone is on+plugged; require it detached first.
+phone_on_usb() {
+  for d in /sys/bus/usb/devices/*/idVendor; do
+    [ "$(cat "$d" 2>/dev/null)" = "0e8d" ] || continue
+    [ "$(cat "${d%/*}/idProduct" 2>/dev/null)" = "201c" ] && return 0
+  done
+  return 1
+}
+
+wait_phone_unplugged() {
+  if phone_on_usb; then
+    log "The phone is attached in normal (adb) mode (0e8d:201c)."
+    log "UNPLUG it now, power it OFF (hold POWER ~10 s), then:"
+    log "  hold Vol+ and Vol− and plug it back in (screen stays black)."
+    log "This script starts mtkclient the moment the phone leaves USB."
+    while phone_on_usb; do sleep 5; done
+    log "Phone detached — handing off to mtkclient (it waits for BROM/preloader)."
+  fi
+}
+
 [ -n "$PHASE" ] || usage
 command -v mtk >/dev/null || die "mtk not found — run inside tools devshell: nix develop -c bash backup.sh $PHASE"
 
@@ -98,6 +121,7 @@ brom_banner() {
 
 case "$PHASE" in
   read)
+    wait_phone_unplugged
     brom_banner "PHASE 1 of 2 — READ"
     # --write_preloader_to_file: preloader lives outside the GPT; dump it too.
     # --skip userdata: owner data + 100+ GB, excluded by plan D1.1.
@@ -111,7 +135,14 @@ case "$PHASE" in
       [ "$f" = "$DIR/preloader.img" ] || mv -v "$f" "$DIR/preloader.img"
     done
     count=$(find "$DIR" -maxdepth 1 -type f ! -name '*.log' | wc -l)
-    [ "$count" -gt 0 ] || die "mtkclient produced no files — read failed, see $mtk_log"
+    [ "$count" -gt 0 ] || {
+      if phone_on_usb; then
+        echo "DIAGNOSIS: the phone is attached in normal (adb) mode (0e8d:201c) — it was" >&2
+        echo "ON while plugged, and mtkclient handshake-fails against a running phone." >&2
+        echo "Unplug it, power OFF fully (hold POWER ~10 s), hold Vol+ and Vol−, plug in." >&2
+      fi
+      die "mtkclient produced no files — read failed, see $mtk_log"
+    }
     ( cd "$DIR" && find . -maxdepth 1 -type f ! -name '*.log' -printf '%f\n' | sort | xargs sha256sum > MANIFEST.sha256 )
     rm -f "$DIR/VERIFIED"
     log "READ done: $count files, manifest written (NOT yet verified)."
@@ -120,6 +151,7 @@ case "$PHASE" in
 
   verify)
     [ -f "$DIR/MANIFEST.sha256" ] || die "no MANIFEST.sha256 in $DIR — run 'read' first"
+    wait_phone_unplugged
     brom_banner "PHASE 2 of 2 — VERIFY"
     vdir="$DIR/.verify"
     rm -rf "$vdir"; mkdir -p "$vdir"
