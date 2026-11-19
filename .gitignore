@@ -1,11 +1,10 @@
-.gradle/
-build/
-app/build/
-local.properties
-.idea/
-*.iml
-.venv/
-__pycache__/
+# Partition backups: images stay local (multi-GB, private); the manifest and
+# verification marker are committed as the durable record of the backup.
+.backups/**
+!.backups/nx1-*/
+!.backups/nx1-*/MANIFEST.sha256
+!.backups/nx1-*/VERIFIED
+
+# Nix build outputs
 result
 result-*
-.backups/
