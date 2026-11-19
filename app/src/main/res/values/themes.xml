@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.HeyAlice" parent="android:Theme.Material.NoActionBar" />
+</resources>
