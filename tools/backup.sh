@@ -32,9 +32,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BACKUPS_ROOT="$REPO_ROOT/.backups"
 DEFAULT_SKIP="userdata"
-# Volatile partition: written by the bootloader during normal boots (flags),
-# so it legitimately differs between two reads. Warned about, not failed.
-VOLATILE="misc.bin"
+# Volatile partitions: written by the bootloader/Android during normal boots,
+# so they legitimately differ between two reads. Hash-differs → WARN + the new
+# hash is recorded side-by-side in VOLATILE-HASHES.txt; never FAIL.
+VOLATILE="expdb metadata misc nvcfg nvdata persist protect1 protect2"
+is_volatile() { case " $VOLATILE " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 usage() { grep '^#' "$0" | sed -n '2,25p'; exit 2; }
 
@@ -113,6 +115,20 @@ done
 
 [ -n "$PHASE" ] || usage
 command -v mtk >/dev/null || die "mtk not found — run inside tools devshell: nix develop -c bash backup.sh $PHASE"
+
+# ---------- single-instance guard ----------
+# Two overlapping verify chains made two mtk instances handshake-fight for
+# ~40 min (observed 2026-11-20). One BROM session at a time: flock the
+# backups root for the whole script lifetime, and refuse to start if any mtk
+# process is already running (manual runs included).
+mkdir -p "$BACKUPS_ROOT"
+command -v flock >/dev/null || die "flock not available — cannot enforce single-instance"
+exec 9>"$BACKUPS_ROOT/.backup.lock"
+flock -n 9 || die "another backup.sh instance holds $BACKUPS_ROOT/.backup.lock — one BROM session at a time"
+if pgrep -f "mtk (rl|r |w |rf|wl)" >/dev/null 2>&1; then
+  pgrep -af "mtk (rl|r |w |rf|wl)" >&2 || true
+  die "an mtk process is already running (above) — it owns the USB. Wait for it or kill it first."
+fi
 
 case "$PHASE" in
   read)
@@ -231,17 +247,24 @@ case "$PHASE" in
 
     fail=0
     mismatch=0; missing=0; volatile=0; ok=0
+    volfile="$DIR/VOLATILE-HASHES.txt"
+    : > "$volfile"
     # every manifest entry must exist in the re-read with an identical hash
-    # (volatile partitions may differ — warned, not failed)
+    # (volatile partitions may differ — warned, new hash recorded side-by-side)
     while read -r hash file; do
       if [ ! -f "$vdir/$file" ]; then
-        if [ "$file" = "$VOLATILE" ]; then
-          echo "VOLATILE missing (not verified): $file" >&2; volatile=$((volatile+1)); continue
+        if is_volatile "$file"; then
+          echo "VOLATILE missing (not verified): $file" >&2
+          echo "$file  manifest=$hash  re-read=MISSING" >> "$volfile"
+          volatile=$((volatile+1)); continue
         fi
         echo "MISSING in re-read: $file" >&2; missing=$((missing+1)); fail=1
       elif [ "$hash" != "$(sha256sum "$vdir/$file" | cut -d' ' -f1)" ]; then
-        if [ "$file" = "$VOLATILE" ]; then
-          echo "VOLATILE hash differs (not verified): $file" >&2; volatile=$((volatile+1)); continue
+        if is_volatile "$file"; then
+          newhash="$(sha256sum "$vdir/$file" | cut -d' ' -f1)"
+          echo "VOLATILE hash differs (not verified): $file" >&2
+          echo "$file  manifest=$hash  re-read=$newhash" >> "$volfile"
+          volatile=$((volatile+1)); continue
         fi
         echo "HASH MISMATCH: $file" >&2; mismatch=$((mismatch+1)); fail=1
       else ok=$((ok+1)); fi
@@ -260,7 +283,7 @@ case "$PHASE" in
     fi
     rm -rf "$vdir"
     rm -f "$DIR/VERIFY-FAILED.txt"
-    printf 'verified %s with mtkclient 2.1.4.1; %d files, 2-pass readback hash match (incl. eMMC Boot1 preloader); volatile skipped: %s\n' \
+    printf 'verified %s with mtkclient 2.1.4.1; %d files, 2-pass readback hash match (incl. eMMC Boot1 preloader); volatile skipped: %s; super verdict: see SUPER-TIEBREAK.txt\n' \
       "$(date -Is)" "$ok" "$VOLATILE" > "$DIR/VERIFIED"
     log "VERIFY PASSED: $ok files match across two independent BROM reads ($volatile volatile skipped)."
     log "Backup is trustworthy — unlock/flash may proceed in a later session."
