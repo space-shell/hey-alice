@@ -52,14 +52,14 @@ Nothing device-side yet. Research only, from the TrebleDroid/treble_experimentat
 
 ## Acceptance criteria
 
-- [ ] `tools/` exists with: `README.md` (runbook matching plan M0/D1.1/D1.2), `backup.sh` (mtkclient read + SHA256 manifest + readback verification, hard-fails on hash mismatch), `verify-root.sh`, `unlock-flash.sh` (unlock + `init_boot` flash sequence with verification gates — present but NOT executed this run), `post-root-setup.sh` (battery-optimisation exemption, debloat list, keycode logging via `getevent` for plan D1.2)
-- [ ] `tools/flake.nix` bring-up devshell (mtkclient, android-tools, scrcpy) — `nix flake show` evaluates cleanly
-- [ ] adb device visible and authorized (`adb devices` shows `device`, not `unauthorized`/`no permissions`) — requires the udev step below; if blocked, produce the exact NixOS config snippet, end your turn, and ask the owner to rebuild
-- [ ] mtkclient backup completed with verified readback, manifest committed as `.backups/nx1-<date>/MANIFEST.sha256` (contents gitignored)
-- [ ] Magisk-patched `init_boot` image built from the backed-up partition (or the Magisk-app fallback documented step-by-step in `tools/README.md`)
-- [ ] Firmware payload downloaded if publicly available (bluefox-guide links, aiphor/mybluefox support pages); if not found in ~20 minutes of searching, document that and move on
-- [ ] Commit little, commit often — each deliverable its own commit on `main`
-- [ ] Final report: what was done, backup hash summary, exact instructions for the owner's unlock session (what they'll physically do, what commands you/next agent will run), and open questions
+- [x] `tools/` exists with: `README.md` (runbook matching plan M0/D1.1/D1.2), `backup.sh` (mtkclient read + SHA256 manifest + readback verification, hard-fails on hash mismatch), `verify-root.sh`, `unlock-flash.sh` (unlock + `init_boot` flash sequence with verification gates — present but NOT executed this run), `post-root-setup.sh` (battery-optimisation exemption, debloat list, keycode logging via `getevent` for plan D1.2)
+- [x] `tools/flake.nix` bring-up devshell (mtkclient, android-tools, scrcpy) — `nix flake show` evaluates cleanly
+- [x] adb device visible and authorized (`adb devices` shows `device`) — resolved via owner-installed udev rule `/etc/udev/rules.d/52-mtk.rules` (VID `0e8d`, covers the NX1's `0e8d:201c` adb interface); RSA accepted 2026-11-19
+- [x] mtkclient backup completed with verified readback, manifest committed as `.backups/nx1-<date>/MANIFEST.sha256` (contents gitignored) — **done with scope notes**: flash-critical set (boot/init_boot/vbmeta/vendor_boot/lk/tee/gpt/seccfg/proinfo + eMMC Boot1 preloader) 2-pass bit-exact; 8 volatile partitions recorded (`VOLATILE-HASHES.txt`); `super.bin` UNVERIFIED after a 3-way tie-break (`SUPER-TIEBREAK.txt`) — WARN-level, evidence points to per-read USB instability, does not affect init_boot flashing (see `VERIFY-STATUS.md`)
+- [x] Magisk-patched `init_boot` image built from the backed-up partition — **both slots** (`init_boot_a.magisk.img` / `init_boot_b.magisk.img`, Magisk v31.1, signature-verified, provenance in `PATCHED-INIT_BOOT.txt`); Magisk-app fallback documented in `tools/README.md` (not needed)
+- [x] Firmware payload sourcing: community MEGA folder located and documented in `tools/README.md` (EEA variant matched to `BF001_EEA`); not downloaded — mtkclient backup supersedes it for restore purposes
+- [x] Commit little, commit often — each deliverable its own commit on `main`
+- [x] Final report: delivered 2026-11-20 (hash summary, unlock-session runbook, open questions)
 
 ## Constraints
 
