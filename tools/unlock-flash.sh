@@ -50,6 +50,17 @@ backup_dir="$(ls -dt "$REPO_ROOT"/.backups/nx1-* 2>/dev/null | head -1 || true)"
 [ -f "$backup_dir/VERIFIED" ] || die "$backup_dir has no VERIFIED marker — run backup.sh verify first"
 log "backup: $backup_dir (VERIFIED)"
 
+# Flash-relevant set must be on disk and manifest-exact, independent of the
+# overall verdict (super risk is documented separately, it does not gate root
+# flashing — we only ever flash init_boot).
+FLASH_CRITICAL="boot_a.bin boot_b.bin init_boot_a.bin init_boot_b.bin vbmeta_a.bin vbmeta_b.bin preloader-boot1.bin"
+for f in $FLASH_CRITICAL; do
+  [ -f "$backup_dir/$f" ] || die "flash-critical file missing from backup: $f"
+  ( cd "$backup_dir" && grep -F "$f" MANIFEST.sha256 | sha256sum --quiet -c - ) \
+    || die "flash-critical file fails manifest check: $f"
+done
+log "flash-critical set verified on disk: $FLASH_CRITICAL"
+
 # ---------- gate 2: patched images ----------
 if [ "${1:-}" ]; then
   patched="$1"

@@ -4,6 +4,9 @@
 !.backups/nx1-*/
 !.backups/nx1-*/MANIFEST.sha256
 !.backups/nx1-*/VERIFIED
+!.backups/nx1-*/VERIFY-STATUS.md
+!.backups/nx1-*/SUPER-TIEBREAK.txt
+!.backups/nx1-*/VOLATILE-HASHES.txt
 
 # Nix build outputs
 result
