@@ -32,6 +32,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BACKUPS_ROOT="$REPO_ROOT/.backups"
 DEFAULT_SKIP="userdata"
+# Volatile partition: written by the bootloader during normal boots (flags),
+# so it legitimately differs between two reads. Warned about, not failed.
+VOLATILE="misc.bin"
 
 usage() { grep '^#' "$0" | sed -n '2,25p'; exit 2; }
 
@@ -127,8 +130,10 @@ case "$PHASE" in
   *) usage ;;
 esac
 
-write_manifest() { # write_manifest <dir> — sha256 of every dump file (no dotfiles/logs)
-  ( cd "$1" && find . -maxdepth 1 -type f ! -name '.*' ! -name '*.log' -printf '%f\n' | sort | xargs sha256sum > MANIFEST.sha256 )
+write_manifest() { # write_manifest <dir> — sha256 of every dump file (no dotfiles/logs/self/markers)
+  ( cd "$1" && find . -maxdepth 1 -type f ! -name '.*' ! -name '*.log' \
+      ! -name 'MANIFEST.sha256' ! -name 'VERIFIED' ! -name 'VERIFY-FAILED.txt' \
+      -printf '%f\n' | sort | xargs sha256sum > MANIFEST.sha256 )
 }
 
 case "$PHASE" in
@@ -192,14 +197,22 @@ case "$PHASE" in
 
   verify)
     [ -f "$DIR/MANIFEST.sha256" ] || die "no MANIFEST.sha256 in $DIR — run 'read' first"
-    brom_banner "PHASE 2 of 2 — VERIFY (pass 1/2: re-read all GPT partitions)"
+    # expected files from rl = manifest minus preloader-boot1.bin (read separately)
+    expected=$(( $(grep -c . "$DIR/MANIFEST.sha256") - 1 ))
     vdir="$DIR/.verify"
-    rm -rf "$vdir"; mkdir -p "$vdir"
-    if ! mtk_read rl "$vdir" --skip "$SKIP" 2>&1 | tee "$mtk_log"; then
-      echo "WARNING: mtk rl exited nonzero — see $mtk_log" >&2
-    fi
-    vdump=$(find "$vdir" -maxdepth 1 -type f ! -name '.*' | wc -l)
-    [ "$vdump" -gt 0 ] || {
+    attempt=1
+    while [ "$attempt" -le 3 ]; do
+      rm -rf "$vdir"; mkdir -p "$vdir"
+      brom_banner "PHASE 2 of 2 — VERIFY pass 1/2 — re-read all GPT partitions (attempt $attempt/3)"
+      if ! mtk_read rl "$vdir" --skip "$SKIP" 2>&1 | tee -a "$mtk_log"; then
+        echo "WARNING: mtk rl exited nonzero — see $mtk_log" >&2
+      fi
+      vdump=$(find "$vdir" -maxdepth 1 -type f ! -name '.*' | wc -l)
+      [ "$vdump" -ge "$expected" ] && break
+      echo "VERIFY re-read attempt $attempt incomplete: $vdump/$expected files — retrying" >&2
+      attempt=$((attempt+1))
+    done
+    [ "$vdump" -ge "$expected" ] || {
       if phone_on_usb; then
         echo "DIAGNOSIS: the phone is attached in normal (adb) mode (0e8d:201c) — it was" >&2
         echo "ON while plugged, and mtkclient handshake-fails against a running phone." >&2
@@ -209,18 +222,25 @@ case "$PHASE" in
       die "verify re-read produced no files — see $mtk_log"
     }
 
-    brom_banner "PHASE 2 of 2 — VERIFY (pass 2/2: re-read eMMC Boot1 preloader)"
+    brom_banner "PHASE 2 of 2 — VERIFY pass 2/2 — re-read eMMC Boot1 preloader"
     if ! mtk_read r preloader "$vdir/preloader-boot1.bin" --parttype boot1 2>&1 | tee -a "$mtk_log"; then
       echo "WARNING: boot1 preloader re-read failed — see $mtk_log" >&2
     fi
 
     fail=0
-    mismatch=0; missing=0; ok=0
+    mismatch=0; missing=0; volatile=0; ok=0
     # every manifest entry must exist in the re-read with an identical hash
+    # (volatile partitions may differ — warned, not failed)
     while read -r hash file; do
       if [ ! -f "$vdir/$file" ]; then
+        if [ "$file" = "$VOLATILE" ]; then
+          echo "VOLATILE missing (not verified): $file" >&2; volatile=$((volatile+1)); continue
+        fi
         echo "MISSING in re-read: $file" >&2; missing=$((missing+1)); fail=1
       elif [ "$hash" != "$(sha256sum "$vdir/$file" | cut -d' ' -f1)" ]; then
+        if [ "$file" = "$VOLATILE" ]; then
+          echo "VOLATILE hash differs (not verified): $file" >&2; volatile=$((volatile+1)); continue
+        fi
         echo "HASH MISMATCH: $file" >&2; mismatch=$((mismatch+1)); fail=1
       else ok=$((ok+1)); fi
     done < "$DIR/MANIFEST.sha256"
@@ -231,15 +251,16 @@ case "$PHASE" in
       echo "FILE SET CHANGED between passes:" >&2; cat "$vdir/.setdiff" >&2; fail=1
     fi
     if [ "$fail" -ne 0 ]; then
-      printf 'VERIFY FAILED %s\n  ok=%d mismatch=%d missing=%d set-changed=%d\n' \
-        "$(date -Is)" "$ok" "$mismatch" "$missing" "$([ -s "$vdir/.setdiff" ] && echo 1 || echo 0)" > "$DIR/VERIFY-FAILED.txt"
+      printf 'VERIFY FAILED %s\n  ok=%d mismatch=%d missing=%d volatile-skipped=%d\n' \
+        "$(date -Is)" "$ok" "$mismatch" "$missing" "$volatile" > "$DIR/VERIFY-FAILED.txt"
       log "VERIFY FAILED — $DIR/.verify kept for forensics. DO NOT unlock/flash."
       exit 1
     fi
     rm -rf "$vdir"
-    printf 'verified %s with mtkclient 2.1.4.1; %d files, 2-pass readback hash match (incl. eMMC Boot1 preloader)\n' \
-      "$(date -Is)" "$ok" > "$DIR/VERIFIED"
-    log "VERIFY PASSED: $ok files match across two independent BROM reads."
+    rm -f "$DIR/VERIFY-FAILED.txt"
+    printf 'verified %s with mtkclient 2.1.4.1; %d files, 2-pass readback hash match (incl. eMMC Boot1 preloader); volatile skipped: %s\n' \
+      "$(date -Is)" "$ok" "$VOLATILE" > "$DIR/VERIFIED"
+    log "VERIFY PASSED: $ok files match across two independent BROM reads ($volatile volatile skipped)."
     log "Backup is trustworthy — unlock/flash may proceed in a later session."
     ;;
 esac
