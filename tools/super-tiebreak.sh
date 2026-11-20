@@ -17,6 +17,11 @@
 #               super carries risk; everything else stays verified. Root
 #               flashing (init_boot) does not depend on super.
 #
+# Path convention: the tie-break (third) read must land as `super.bin` inside
+# its read directory — mtkclient names dumps after the partition requested,
+# so `mtk r preloader .verify3/super.tiebreak.bin` writes super.tiebreak.bin;
+# rename it to super.bin (or symlink) before running this script.
+#
 # READ-ONLY against the device. Usage:
 #   nix develop -c ../tools/super-tiebreak.sh [DIR [READ2_DIR [READ3_DIR]]]
 set -uo pipefail
