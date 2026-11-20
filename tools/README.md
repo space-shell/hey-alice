@@ -86,21 +86,34 @@ Root goes into `init_boot` (ramdisk), never `boot` — the NX1 boot partition is
 gzip-compressed and Google GKI images break WiFi (plan R8, TrebleDroid wiki).
 
 ```sh
-../tools/patch-init-boot.sh            # uses newest VERIFIED backup's init_boot_a.bin
+../tools/patch-init-boot.sh            # patches BOTH slots from the newest backup
+# or: ../tools/patch-init-boot.sh --allow-unverified   # before VERIFIED exists (explicit order only)
 # or: ../tools/patch-init-boot.sh path/to/init_boot_a.bin
 ```
 
 - Downloads the pinned official Magisk release APK (v31.1, GitHub), extracts
-  `magiskboot` (x86_64 host tool) + arm64 payload binaries, runs upstream
-  `boot_patch.sh` with app-default flags (`KEEPVERITY=true KEEPFORCEENCRYPT=true`,
-  `PREINITDEVICE=metadata`), verifies the result carries the Magisk ramdisk
-  signature, writes `magisk-patched-init_boot.img` + `PATCHED-INIT_BOOT.txt`
-  (sha256 provenance) next to the backup.
+  `magiskboot` (x86_64 host tool) + arm64 payload binaries, runs the APK's own
+  `boot_patch.sh` with app-default flags (`KEEPVERITY=true
+  KEEPFORCEENCRYPT=true`, `PREINITDEVICE=metadata`), verifies each result
+  carries the Magisk ramdisk signature, and writes per-slot images + provenance
+  next to the backup:
+  - `init_boot_a.magisk.img` / `init_boot_b.magisk.img` (sha256 in
+    `PATCHED-INIT_BOOT.txt`, gitignored with the other images)
+- **Which slot gets flashed: the CURRENT one, picked at flash time.** The NX1
+  is A/B; at bring-up the active slot is `a` (`ro.boot.slot=a`, confirmed
+  2026-11-19) and a wipe does not switch slots — but `unlock-flash.sh` does not
+  assume it: after rebooting to bootloader it reads `fastboot getvar
+  current-slot` and flashes `init_boot_<slot>.magisk.img`. Both slots are
+  patched so any active slot is covered, and each image embeds the SHA1 of its
+  own stock source.
+- `verify-root.sh` remains the post-flash gate; `unlock-flash.sh` refuses to
+  flash unless the backup has `VERIFIED` and the image hash is recorded in
+  `PATCHED-INIT_BOOT.txt`.
 - **Magisk-app fallback** (if PC-side plumbing fights): copy
   `.backups/nx1-<date>/init_boot_a.bin` to the phone (Files app or `adb push`),
   install `Magisk-v31.1.apk`, Magisk → Install → **Select and Patch a File** →
   pick `init_boot_a.bin` → it writes `magisk_patched-<random>.img` in Download →
-  `adb pull` it to `.backups/nx1-<date>/magisk-patched-init_boot.img` and record
+  `adb pull` it to `.backups/nx1-<date>/init_boot_a.magisk.img` and record
   its sha256 in `PATCHED-INIT_BOOT.txt` (same layout the scripts expect).
 
 ## Unlock + root session (future — owner physically present)

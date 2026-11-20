@@ -50,14 +50,24 @@ backup_dir="$(ls -dt "$REPO_ROOT"/.backups/nx1-* 2>/dev/null | head -1 || true)"
 [ -f "$backup_dir/VERIFIED" ] || die "$backup_dir has no VERIFIED marker — run backup.sh verify first"
 log "backup: $backup_dir (VERIFIED)"
 
-# ---------- gate 2: patched image ----------
-patched="${1:-$backup_dir/magisk-patched-init_boot.img}"
-[ -f "$patched" ] || die "patched image missing: $patched (run patch-init-boot.sh)"
-[ -f "$backup_dir/PATCHED-INIT_BOOT.txt" ] || die "PATCHED-INIT_BOOT.txt missing — provenance unrecorded"
-log "patched image: $patched"
-sha256sum "$patched"
-grep -q "$(sha256sum "$patched" | cut -d' ' -f1)" "$backup_dir/PATCHED-INIT_BOOT.txt" \
-  || die "patched image hash not recorded in PATCHED-INIT_BOOT.txt — re-run patch-init-boot.sh"
+# ---------- gate 2: patched images ----------
+if [ "${1:-}" ]; then
+  patched="$1"
+  [ -f "$patched" ] || die "patched image missing: $patched (run patch-init-boot.sh)"
+  grep -qF "$(sha256sum "$patched" | cut -d' ' -f1)" "$backup_dir/PATCHED-INIT_BOOT.txt" \
+    || die "patched image hash not recorded in PATCHED-INIT_BOOT.txt — re-run patch-init-boot.sh"
+  log "patched image (explicit): $patched"
+  slot_img_provided=1
+else
+  # A/B device: pick per-slot images at flash time from the CURRENT slot.
+  for s in a b; do
+    [ -f "$backup_dir/init_boot_${s}.magisk.img" ] || die "missing $backup_dir/init_boot_${s}.magisk.img — run patch-init-boot.sh (patches both slots)"
+    grep -qF "$(sha256sum "$backup_dir/init_boot_${s}.magisk.img" | cut -d' ' -f1)" "$backup_dir/PATCHED-INIT_BOOT.txt" \
+      || die "init_boot_${s}.magisk.img hash not recorded in PATCHED-INIT_BOOT.txt — re-run patch-init-boot.sh"
+  done
+  log "patched images: init_boot_{a,b}.magisk.img (slot picked at flash time)"
+  slot_img_provided=0
+fi
 
 # ---------- gate 3: device present ----------
 adb get-state >/dev/null 2>&1 || adb wait-for-device
@@ -121,8 +131,18 @@ for i in $(seq 1 30); do fastboot devices | grep -q . && break; sleep 2; [ "$i" 
 unlocked="$(fastboot getvar unlocked 2>&1 | awk -F: '{gsub(/ /,"",$2); print $2}')"
 [ "$unlocked" = "yes" ] || die "bootloader reports unlocked='$unlocked' — refusing to flash on a locked bootloader"
 log "bootloader confirmed unlocked — flashing init_boot"
-# A/B device: plain name flashes the current slot
-fastboot flash init_boot "$patched"
+# A/B device: flash the CURRENT slot's Magisk image (slot confirmed here, not
+# assumed — a wipe does not switch slots, but the check is free insurance).
+if [ "$slot_img_provided" = 1 ]; then
+  fastboot flash init_boot "$patched"
+else
+  slot="$(fastboot getvar current-slot 2>&1 | awk -F: '{gsub(/ /,"",$2); print $2}')"
+  case "$slot" in a|b) ;; *) die "could not determine current slot (got '$slot') — pass an image path explicitly" ;; esac
+  patched="$backup_dir/init_boot_${slot}.magisk.img"
+  log "current slot: $slot → flashing $patched"
+  sha256sum "$patched"
+  fastboot flash init_boot "$patched"
+fi
 fastboot getvar current-slot
 log "flash complete — rebooting"
 fastboot reboot
