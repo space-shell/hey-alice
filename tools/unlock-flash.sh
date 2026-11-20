@@ -80,18 +80,20 @@ else
   slot_img_provided=0
 fi
 
-# ---------- gate 3: device present ----------
-adb get-state >/dev/null 2>&1 || adb wait-for-device
-[ "$(adb get-state)" = "device" ] || die "adb device not ready"
+# ---------- gate 3: device present (skipped when already in fastboot) ----------
+if ! fastboot devices | grep -q .; then
+  adb get-state >/dev/null 2>&1 || adb wait-for-device
+  [ "$(adb get-state)" = "device" ] || die "adb device not ready"
 
-# ---------- step 1: reboot to bootloader ----------
-log "rebooting to bootloader — owner: nothing to do yet"
-adb reboot bootloader
-for i in $(seq 1 30); do
-  fastboot devices | grep -q . && break
-  sleep 2
-  [ "$i" = 30 ] && die "fastboot device never appeared"
-done
+  # ---------- step 1: reboot to bootloader ----------
+  log "rebooting to bootloader — owner: nothing to do yet"
+  adb reboot bootloader
+  for i in $(seq 1 30); do
+    fastboot devices | grep -q . && break
+    sleep 2
+    [ "$i" = 30 ] && die "fastboot device never appeared"
+  done
+fi
 log "fastboot online: $(fastboot devices | head -1)"
 
 # ---------- step 2: unlock (WIPES) ----------
@@ -105,7 +107,11 @@ else
   echo "  Source: bluefox-guide.neocities.org/unlock.html (NX1-verified)."
   echo "  The device wipes itself and reboots (takes a couple of minutes)."
   echo "------------------------------------------------------------------"
-  confirm "Owner ready, start flashing unlock?"
+  if [ "${UNLOCK_CONFIRMED:-}" = "wipe-and-unlock" ]; then
+    log "pre-unlock confirm satisfied via UNLOCK_CONFIRMED"
+  else
+    confirm "Owner ready, start flashing unlock?"
+  fi
   fastboot flashing unlock || true
   echo "Waiting for the wipe to finish and the device to come back..."
   adb wait-for-device || true
