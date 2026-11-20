@@ -97,7 +97,7 @@ fi
 log "fastboot online: $(fastboot devices | head -1)"
 
 # ---------- step 2: unlock (WIPES) ----------
-if [ "$(fastboot getvar unlocked 2>&1 | awk -F: '{gsub(/ /,"",$2); print $2}')" = "yes" ]; then
+if [ "$(fastboot getvar unlocked 2>&1 | awk -F: '/unlocked:/{gsub(/ /,"",$2); print $2}')" = "yes" ]; then
   log "bootloader already unlocked — skipping flashing unlock"
 else
   echo "------------------------------------------------------------------"
@@ -145,7 +145,7 @@ done
 log "rebooting to bootloader again for the flash"
 adb reboot bootloader
 for i in $(seq 1 30); do fastboot devices | grep -q . && break; sleep 2; [ "$i" = 30 ] && die "no fastboot"; done
-unlocked="$(fastboot getvar unlocked 2>&1 | awk -F: '{gsub(/ /,"",$2); print $2}')"
+unlocked="$(fastboot getvar unlocked 2>&1 | awk -F: '/unlocked:/{gsub(/ /,"",$2); print $2}')"
 [ "$unlocked" = "yes" ] || die "bootloader reports unlocked='$unlocked' — refusing to flash on a locked bootloader"
 log "bootloader confirmed unlocked — flashing init_boot"
 # A/B device: flash the CURRENT slot's Magisk image (slot confirmed here, not
@@ -153,7 +153,7 @@ log "bootloader confirmed unlocked — flashing init_boot"
 if [ "$slot_img_provided" = 1 ]; then
   fastboot flash init_boot "$patched"
 else
-  slot="$(fastboot getvar current-slot 2>&1 | awk -F: '{gsub(/ /,"",$2); print $2}')"
+  slot="$(fastboot getvar current-slot 2>&1 | awk -F: '/current-slot:/{gsub(/ /,"",$2); print $2}')"
   case "$slot" in a|b) ;; *) die "could not determine current slot (got '$slot') — pass an image path explicitly" ;; esac
   patched="$backup_dir/init_boot_${slot}.magisk.img"
   log "current slot: $slot → flashing $patched"
