@@ -132,6 +132,6 @@ log "waiting for boot (timeout 300s)..."
 for i in $(seq 1 60); do
   [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break
   sleep 5
-  [ "$i" = 60 ] && { echo "BOOTLOOP SUSPECTED — do not panic: enter BROM (unplug, power off, hold Vol+Vol-, plug) and restore init_boot from the backup with: mtk w init_boot <backup>/init_boot_a.img (restore session, documented in tools/README.md)"; exit 1; }
+  [ "$i" = 60 ] && { echo "BOOTLOOP SUSPECTED — do not panic: enter BROM (unplug, power off, hold Vol+Vol-, plug) and restore init_boot from the backup with: mtk w init_boot <backup>/init_boot_a.bin (restore session, documented in tools/README.md)"; exit 1; }
 done
 "$SCRIPT_DIR/verify-root.sh"

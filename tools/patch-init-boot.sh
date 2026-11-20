@@ -12,7 +12,7 @@
 # unpacking the result and checking the upstream Magisk-patch signature.
 #
 # Usage:  nix develop -c ../tools/patch-init-boot.sh [STOCK_INIT_BOOT.img]
-#   With no argument, picks init_boot_a.img from the newest .backups/nx1-*/.
+#   With no argument, picks init_boot_a.bin from the newest .backups/nx1-*/.
 #   Override version: MAGISK_VERSION=v31.1 ../tools/patch-init-boot.sh ...
 set -euo pipefail
 
@@ -65,7 +65,7 @@ if [ -z "$stock" ]; then
   newest_backup="$(ls -dt "$REPO_ROOT"/.backups/nx1-* 2>/dev/null | head -1 || true)"
   [ -n "$newest_backup" ] || die "no .backups/nx1-*/ found — run backup.sh read first, or pass a stock image path"
   [ -f "$newest_backup/VERIFIED" ] || die "$newest_backup is not VERIFIED — refusing to patch from an unverified backup"
-  stock="$newest_backup/init_boot_a.img"
+  stock="$newest_backup/init_boot_a.bin"
 fi
 [ -f "$stock" ] || die "stock image not found: $stock"
 log "Stock image: $stock ($(stat -c%s "$stock") bytes)"
@@ -81,11 +81,11 @@ backup_dir="$(cd "$(dirname "$stock")" && pwd)"
 out="new-boot.img"
 rm -f "$out"
 preinit_exports=""
-if [ -f "$backup_dir/metadata.img" ]; then
+if [ -f "$backup_dir/metadata.bin" ]; then
   preinit_exports="PREINITDEVICE=metadata"
   log "PREINITDEVICE=metadata (from backup GPT)"
 else
-  log "WARNING: no metadata.img in backup — PREINITDEVICE unset; magiskinit will auto-detect pre-init storage. Verify root with the Magisk app after first boot."
+  log "WARNING: no metadata.bin in backup — PREINITDEVICE unset; magiskinit will auto-detect pre-init storage. Verify root with the Magisk app after first boot."
 fi
 (
   cd "$stage"

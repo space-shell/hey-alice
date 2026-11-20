@@ -60,8 +60,15 @@ cd tools && nix develop
 ../tools/backup.sh status   # offline summary
 ```
 
-- Output: `.backups/nx1-<date>/` — `<partition>.img` files, `preloader.img`,
-  `MANIFEST.sha256` (sha256sum format), `mtk-read.log`/`mtk-verify.log`.
+- Output: `.backups/nx1-<date>/` — `<partition>.bin` files (mtkclient's naming),
+  `preloader-boot1.bin` (eMMC Boot1 = the real preloader), `otp.bin`,
+  `flashinfo.bin`, `gpt.bin`, `MANIFEST.sha256` (sha256sum format), and mtk
+  logs. `.state`/`hwparam.json` are mtkclient session artifacts — on disk but
+  excluded from the manifest.
+- Each phase needs BROM entries: `read` = 2 (rl pass + Boot1 read), `verify` =
+  2, `preloader` = 1. The script prompts between passes and waits for the
+  device itself; **unplug the phone when it asks** — mtkclient grabs a running
+  phone (0e8d:201c) and handshake-fails forever instead of waiting for BROM.
 - Verify is strict: every file re-read in a second BROM session must hash-match
   and the file set must be identical. Any mismatch → `VERIFY-FAILED.txt`, exit 1,
   **no VERIFIED marker** — never unlock/flash against an unverified backup.
@@ -79,8 +86,8 @@ Root goes into `init_boot` (ramdisk), never `boot` — the NX1 boot partition is
 gzip-compressed and Google GKI images break WiFi (plan R8, TrebleDroid wiki).
 
 ```sh
-../tools/patch-init-boot.sh            # uses newest VERIFIED backup's init_boot_a.img
-# or: ../tools/patch-init-boot.sh path/to/init_boot_a.img
+../tools/patch-init-boot.sh            # uses newest VERIFIED backup's init_boot_a.bin
+# or: ../tools/patch-init-boot.sh path/to/init_boot_a.bin
 ```
 
 - Downloads the pinned official Magisk release APK (v31.1, GitHub), extracts
@@ -90,9 +97,9 @@ gzip-compressed and Google GKI images break WiFi (plan R8, TrebleDroid wiki).
   signature, writes `magisk-patched-init_boot.img` + `PATCHED-INIT_BOOT.txt`
   (sha256 provenance) next to the backup.
 - **Magisk-app fallback** (if PC-side plumbing fights): copy
-  `.backups/nx1-<date>/init_boot_a.img` to the phone (Files app or `adb push`),
+  `.backups/nx1-<date>/init_boot_a.bin` to the phone (Files app or `adb push`),
   install `Magisk-v31.1.apk`, Magisk → Install → **Select and Patch a File** →
-  pick `init_boot_a.img` → it writes `magisk_patched-<random>.img` in Download →
+  pick `init_boot_a.bin` → it writes `magisk_patched-<random>.img` in Download →
   `adb pull` it to `.backups/nx1-<date>/magisk-patched-init_boot.img` and record
   its sha256 in `PATCHED-INIT_BOOT.txt` (same layout the scripts expect).
 
@@ -115,7 +122,7 @@ bring-up run. What it will ask of the owner:
    magisk binary, manager app, `/data/adb`
 
 Bootloop safety: if boot doesn't complete in ~5 min, enter BROM and restore
-`mtk w init_boot .backups/nx1-<date>/init_boot_a.img` (a write session — only
+`mtk w init_boot .backups/nx1-<date>/init_boot_a.bin` (a write session — only
 valid because the backup is VERIFIED).
 
 ## Post-root (D1.2/D1.7 prep)
