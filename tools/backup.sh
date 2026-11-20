@@ -151,7 +151,7 @@ case "$PHASE" in
     }
 
     brom_banner "PHASE 1 of 2 — READ (pass 2/2: eMMC Boot1 = the real preloader)"
-    if ! mtk_read --parttype boot1 r preloader "$DIR/preloader-boot1.bin" 2>&1 | tee -a "$mtk_log"; then
+    if ! mtk_read r preloader "$DIR/preloader-boot1.bin" --parttype boot1 2>&1 | tee -a "$mtk_log"; then
       echo "WARNING: boot1 preloader read failed — see $mtk_log" >&2
     fi
     [ -s "$DIR/preloader-boot1.bin" ] || log "WARNING: preloader-boot1.bin missing or empty"
@@ -165,7 +165,7 @@ case "$PHASE" in
 
   preloader)
     brom_banner "PRELOADER — eMMC Boot1 (the real preloader, 4 MB)"
-    if ! mtk_read --parttype boot1 r preloader "$DIR/preloader-boot1.bin" 2>&1 | tee -a "$DIR/mtk-$PHASE.log"; then
+    if ! mtk_read r preloader "$DIR/preloader-boot1.bin" --parttype boot1 2>&1 | tee -a "$DIR/mtk-$PHASE.log"; then
       echo "WARNING: boot1 preloader read failed — see $DIR/mtk-$PHASE.log" >&2
     fi
     size=$(stat -c%s "$DIR/preloader-boot1.bin" 2>/dev/null || echo 0)
@@ -190,7 +190,7 @@ case "$PHASE" in
     fi
 
     brom_banner "PHASE 2 of 2 — VERIFY (pass 2/2: re-read eMMC Boot1 preloader)"
-    if ! mtk_read --parttype boot1 r preloader "$vdir/preloader-boot1.bin" 2>&1 | tee -a "$mtk_log"; then
+    if ! mtk_read r preloader "$vdir/preloader-boot1.bin" --parttype boot1 2>&1 | tee -a "$mtk_log"; then
       echo "WARNING: boot1 preloader re-read failed — see $mtk_log" >&2
     fi
 
