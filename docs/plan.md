@@ -247,6 +247,6 @@ Scaffolded 2026-11-19: repo `hey-alice` at `~/projects/hey-alice`; this document
 ## 9. Immediate next actions
 
 1. ~~Scaffold `hey-alice`~~ — done 2026-11-19 (`~/projects/hey-alice`); remaining: gradle wrapper + first `assembleDebug` inside the devshell.
-2. D1.1 backup + root (unblocks everything, zero risk after backup).
+2. D1.1 backup + root — **backup DONE 2026-11-20** (`.backups/nx1-20261120-003415/`, VERIFIED with `super.bin` UNVERIFIED warn-level, see `VERIFY-STATUS.md`); Magisk-patched `init_boot` built for both slots. **Remaining: the unlock+root session** — owner present, run `tools/unlock-flash.sh` (runbook in `tools/README.md`), then `verify-root.sh` + `post-root-setup.sh`.
 3. D1.3 audio/AEC spike in parallel (longest technical unknown).
 4. Draft voice-session protocol doc during M1 so M2/M3 build against a written contract.
