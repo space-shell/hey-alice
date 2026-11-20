@@ -55,8 +55,18 @@ phone_on_usb() {
 }
 
 wait_phone_unplugged() {
-  if phone_on_usb; then
-    log "The phone is attached in normal (adb) mode (0e8d:201c)."
+  # After a finished pass the phone reboots back to normal mode (0e8d:201c).
+  # Let that settle — it re-appears on USB within ~1 min of the reset — then
+  # require an unplug before mtkclient starts. Starting mtk while the phone
+  # is on+plugged makes it handshake-fail against the running phone instead
+  # of waiting for BROM (observed twice, 2026-11-19).
+  settled=0
+  for i in $(seq 1 25); do
+    if phone_on_usb; then settled=1; break; fi
+    sleep 3
+  done
+  if [ "$settled" = 1 ]; then
+    log "Phone is back in normal (adb) mode (0e8d:201c)."
     log "UNPLUG it now, power it OFF (hold POWER ~10 s), then:"
     log "  hold Vol+ and Vol− and plug it back in (screen stays black)."
     log "This script starts mtkclient the moment the phone leaves USB."
@@ -188,6 +198,16 @@ case "$PHASE" in
     if ! mtk_read rl "$vdir" --skip "$SKIP" 2>&1 | tee "$mtk_log"; then
       echo "WARNING: mtk rl exited nonzero — see $mtk_log" >&2
     fi
+    vdump=$(find "$vdir" -maxdepth 1 -type f ! -name '.*' | wc -l)
+    [ "$vdump" -gt 0 ] || {
+      if phone_on_usb; then
+        echo "DIAGNOSIS: the phone is attached in normal (adb) mode (0e8d:201c) — it was" >&2
+        echo "ON while plugged, and mtkclient handshake-fails against a running phone." >&2
+        echo "Unplug it, power OFF fully (hold POWER ~10 s), hold Vol+ and Vol−, plug in." >&2
+      fi
+      tail -5 "$mtk_log" >&2
+      die "verify re-read produced no files — see $mtk_log"
+    }
 
     brom_banner "PHASE 2 of 2 — VERIFY (pass 2/2: re-read eMMC Boot1 preloader)"
     if ! mtk_read r preloader "$vdir/preloader-boot1.bin" --parttype boot1 2>&1 | tee -a "$mtk_log"; then
