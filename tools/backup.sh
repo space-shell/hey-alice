@@ -45,36 +45,38 @@ newest_backup_dir() {
   ls -dt "$BACKUPS_ROOT"/nx1-* 2>/dev/null | head -1 || true
 }
 
-# The NX1 attached in normal (adb) mode is 0e8d:201c. mtkclient's wait loop
-# matches it and burns handshake attempts against a RUNNING phone forever
-# (observed 2026-11-19: 1000 failures, zero bytes). Refuse to start mtk while
-# the phone is on+plugged; require it detached first.
-phone_on_usb() {
+# The NX1 in normal (adb) mode is 0e8d:201c; off+plugged without keys sits in
+# preloader mode 0e8d:2000/2001 — mtkclient's preloader handshake fails on this
+# device (observed 2026-11-20), so ONLY real BROM (0e8d:0003) or a detached
+# bus may be handed to mtkclient. Anything else blocks until the owner unplugs
+# and redoes the entry with both volume keys held.
+phone_blocking() {
   for d in /sys/bus/usb/devices/*/idVendor; do
     [ "$(cat "$d" 2>/dev/null)" = "0e8d" ] || continue
-    [ "$(cat "${d%/*}/idProduct" 2>/dev/null)" = "201c" ] && return 0
+    p="$(cat "${d%/*}/idProduct" 2>/dev/null)"
+    [ "$p" = "0003" ] && continue   # real BROM is fine
+    return 0                        # 201c / 2000 / 2001 / anything else: block
   done
   return 1
 }
 
 wait_phone_unplugged() {
-  # After a finished pass the phone reboots back to normal mode (0e8d:201c).
+  # After a finished pass the phone reboots back to normal (or preloader) mode.
   # Let that settle — it re-appears on USB within ~1 min of the reset — then
-  # require an unplug before mtkclient starts. Starting mtk while the phone
-  # is on+plugged makes it handshake-fail against the running phone instead
-  # of waiting for BROM (observed twice, 2026-11-19).
+  # require an unplug+proper-BROM-entry before mtkclient starts.
   settled=0
   for i in $(seq 1 25); do
-    if phone_on_usb; then settled=1; break; fi
+    if phone_blocking; then settled=1; break; fi
     sleep 3
   done
   if [ "$settled" = 1 ]; then
-    log "Phone is back in normal (adb) mode (0e8d:201c)."
+    log "Phone is attached in a non-BROM mode (adb=0e8d:201c or preloader=0e8d:2000/2001)."
     log "UNPLUG it now, power it OFF (hold POWER ~10 s), then:"
     log "  hold Vol+ and Vol− and plug it back in (screen stays black)."
-    log "This script starts mtkclient the moment the phone leaves USB."
-    while phone_on_usb; do sleep 5; done
-    log "Phone detached — handing off to mtkclient (it waits for BROM)."
+    log "This script starts mtkclient the moment a real BROM device (0e8d:0003)"
+    log "appears — or the bus goes quiet."
+    while phone_blocking; do sleep 5; done
+    log "Handing off to mtkclient."
   fi
 }
 
@@ -157,7 +159,7 @@ case "$PHASE" in
     fi
     count=$(find "$DIR" -maxdepth 1 -type f ! -name '.*' ! -name '*.log' | wc -l)
     [ "$count" -gt 0 ] || {
-      if phone_on_usb; then
+      if phone_blocking; then
         echo "DIAGNOSIS: the phone is attached in normal (adb) mode (0e8d:201c) — it was" >&2
         echo "ON while plugged, and mtkclient handshake-fails against a running phone." >&2
         echo "Unplug it, power OFF fully (hold POWER ~10 s), hold Vol+ and Vol−, plug in." >&2
@@ -185,7 +187,7 @@ case "$PHASE" in
     fi
     size=$(stat -c%s "$DIR/preloader-boot1.bin" 2>/dev/null || echo 0)
     [ "$size" -gt 0 ] || {
-      if phone_on_usb; then
+      if phone_blocking; then
         echo "DIAGNOSIS: phone attached in normal (adb) mode (0e8d:201c) — unplug, power OFF fully, hold Vol+Vol−, plug in." >&2
       fi
       die "preloader-boot1.bin not written — see $DIR/mtk-$PHASE.log"
@@ -213,7 +215,7 @@ case "$PHASE" in
       attempt=$((attempt+1))
     done
     [ "$vdump" -ge "$expected" ] || {
-      if phone_on_usb; then
+      if phone_blocking; then
         echo "DIAGNOSIS: the phone is attached in normal (adb) mode (0e8d:201c) — it was" >&2
         echo "ON while plugged, and mtkclient handshake-fails against a running phone." >&2
         echo "Unplug it, power OFF fully (hold POWER ~10 s), hold Vol+ and Vol−, plug in." >&2
