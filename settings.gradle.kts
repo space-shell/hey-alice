@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "hey-alice"
 include(":app")
+include(":overlay")

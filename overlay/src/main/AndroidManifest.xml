@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Runtime overlay onto framework-res; enabled via `cmd overlay enable`
+         after root preinstall to /product/overlay (user installs fail the
+         platform-signature check). -->
+    <overlay
+        android:targetPackage="android"
+        android:priority="999" />
+
+    <application
+        android:label="AlicePowerOverlay"
+        android:hasCode="false" />
+</manifest>

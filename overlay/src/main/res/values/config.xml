@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ADR-6: power long-press must not fight hold-to-talk. 0 = no action.
+         Short press (screen toggle) is untouched. -->
+    <integer name="config_longPressOnPowerBehavior">0</integer>
+</resources>
