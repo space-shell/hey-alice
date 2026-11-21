@@ -82,7 +82,7 @@ Measured facts (34 captured presses, `tools/post-root-setup.sh sidekey-log`):
   the companion service can read `event0` directly. Magisk auto-denies `su`
   prompts while the screen is locked — capture windows must keep the screen on.
 
-**ADR-6 — Side-key / hold-to-talk contract** (decided 2026-11-21):
+**ADR-6 — Side-key / hold-to-talk contract** — **Status: Accepted (owner sign-off, 2026-11-21)**. Owner explicitly confirmed losing the power-menu long-press is acceptable ("device can be powered down in other ways"). This closes the last open decision blocking M1's audio-engine design: the hold-to-talk input path is fixed — raw `/dev/input/event0` + duration detection via `su`, no framework interference.
 
 - **Hold ≥ 500 ms** on the side key → **PTT talk**. Implementation: companion
   foreground service reads `/dev/input/event0` raw events (root), measures
@@ -155,7 +155,7 @@ Key decisions to record as ADRs:
 - **ADR-3 Code layout**: **standalone new repo** for the Alice app — repo `hey-alice` at `~/projects/hey-alice`. `xagent` (illegal-lion) stays a UI-first launcher; Alice is service-first — foreground service, audio engine, wake word, with a minimal status UI, not a card deck. Port the proven Paseo connection architecture (direct WS + relay E2EE, reconnect, agent-state model) into the new repo as adapted code, not shared Gradle modules — avoid coupling a headless assistant to the launcher's release cycle. Extract a shared connection library later only if divergence cost proves out. Alice connects to a single daemon connection in v1; multi-daemon remerge is launcher-specific and deferred.
 - **ADR-4 Transport codec**: PCM 16 kHz mono on WiFi; Opus 16–24 kbps before 4G field trials (radio-on-time matters on battery).
 - **ADR-5 Security**: device stores daemon bearer credentials in Android Keystore; full-disk encryption on; relay E2EE as first link, Tailscale second; gateway refuses unauthenticated streams.
-- **ADR-6 Side key / hold-to-talk**: side key = power key (`/dev/input/event0`, KEY_POWER); hold ≥ 500 ms → PTT via raw-event capture + RRO disabling power-menu long-press; double press reserved. See §D1.2. Decided 2026-11-21.
+- **ADR-6 Side key / hold-to-talk** — **Status: Accepted (owner sign-off, 2026-11-21)**: side key = power key (`/dev/input/event0`, KEY_POWER); hold ≥ 500 ms → PTT via raw-event capture + RRO disabling power-menu long-press (owner approved losing the power menu); double press reserved. See §D1.2.
 
 ### Voice session protocol (one bidirectional WebSocket per session)
 
