@@ -32,8 +32,9 @@ adb get-state >/dev/null 2>&1 || adb wait-for-device
 battery_exempt() {
   log "whitelisting $ALICE_PKG from battery optimisation"
   adb shell dumpsys deviceidle whitelist +"$ALICE_PKG"
-  # appops belt-and-suspenders: allow run-anywhere even outside doze whitelist
-  adb shell appops set "$ALICE_PKG" RUN_ANY_IN_BACKGROUND ignore 2>/dev/null \
+  # appops belt-and-suspenders: 'allow' (not 'ignore' — that is the deny mode
+  # and would restrict background running; found 2026-11-21, was backwards)
+  adb shell appops set "$ALICE_PKG" RUN_ANY_IN_BACKGROUND allow 2>/dev/null \
     || log "appops RUN_ANY_IN_BACKGROUND not settable yet (package not installed?)"
   adb shell su -c "dumpsys deviceidle whitelist" | grep -q "$ALICE_PKG" \
     && log "verified: $ALICE_PKG in deviceidle whitelist" \
