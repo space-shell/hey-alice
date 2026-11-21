@@ -31,7 +31,7 @@ Status: plan v1, requirements settled with owner 2026-11-19.
 - A1: ~~Device variant~~ **Resolved** — 8 GB / 128 GB variant confirmed by owner.
 - A2: Paseo's integrated speech pipeline exposes something addressable (endpoint, protocol, auth). Unverified.
 - A3: z.ai subscription includes a realtime/voice API (GLM voice/realtime family) usable server-side. Unverified — spike with kill criteria.
-- A4: Side key emits standard Android key events (down/up/long-press) capturable by a foreground app or remappable with root. Unverified.
+- A4: ~~Side key emits standard Android key events capturable by a foreground app or remappable with root~~ **Resolved 2026-11-21** — side key IS the power key (`/dev/input/event0`, KEY_POWER); raw-event capture works with root (ADR-6).
 - A5: NX1's `VOICE_COMMUNICATION` audio source provides working AEC — required for barge-in without the device hearing its own TTS. Unverified.
 
 ### Non-goals for v1
@@ -68,11 +68,35 @@ Each item is a spike with a concrete output. No production code in this phase.
 - **Output**: `docs/device/backup-manifest.md`, verified root, rehearsed rollback.
 - **Gate**: if KernelSU and Magisk both fail → stop, reassess (fallback exists via mtkclient, but treat as blocker).
 
-### D1.2 — Side key interrogation
-- Log all InputEvents from the side key: keycodes, down/up, long-press, double-press.
-- Test capture from a foreground service and remap with root (e.g. Key Mapper / direct interception).
-- **Output**: hold-to-talk capture mechanism + keycode contract.
-- **Fallback if not capturable**: volume-key long-press, or a always-visible grab area / Bluetooth button.
+### D1.2 — Side key interrogation — **RESOLVED 2026-11-21 (rooted device)**
+
+Measured facts (34 captured presses, `tools/post-root-setup.sh sidekey-log`):
+
+- The NX1 side key **IS the power key**: input device `/dev/input/event0`
+  (`mtk-pmic-keys`), emits `KEY_POWER` (0x0074) DOWN/UP; second keycode 0x00f0
+  (240) present but unused in practice. 34/34 presses were KEY_POWER.
+- There is **no separate shortcut keycode**. The OEM "customizable shortcut"
+  (`secure setting double_side_key=1`) is software layering on power-press
+  patterns, not a distinct key.
+- Raw capture works with root: `getevent -lt /dev/input/event0` through `su`;
+  the companion service can read `event0` directly. Magisk auto-denies `su`
+  prompts while the screen is locked — capture windows must keep the screen on.
+
+**ADR-6 — Side-key / hold-to-talk contract** (decided 2026-11-21):
+
+- **Hold ≥ 500 ms** on the side key → **PTT talk**. Implementation: companion
+  foreground service reads `/dev/input/event0` raw events (root), measures
+  DOWN→UP duration; a root-installed Runtime Resource Overlay sets framework
+  `config_longPressOnPowerBehavior=0` so the power menu never competes.
+- **Short press** → unchanged framework screen toggle (useful when docked).
+- **Double press** (two DOWNs within 400 ms) → reserved for an Alice
+  quick-action (decide later, not v1).
+- Rejected for now: OEM `double_side_key` repoint (double-press → app launch;
+  fights our own double-press semantics, adds a Settings dependency), and
+  volume-key remap (loses hardware volume while away from dock; D1.2's old
+  fallback is unnecessary — raw capture is confirmed working).
+- Raw capture logs from the session: `logs/sidekey-*.log` (gitignored; the
+  contract above is the durable record).
 
 ### D1.3 — Audio path + AEC validation (biggest technical risk)
 - Record from mic while playing TTS to speaker on the NX1.
@@ -126,11 +150,12 @@ Each item is a spike with a concrete output. No production code in this phase.
 ```
 
 Key decisions to record as ADRs:
-- **ADR-1 Host OS**: rooted stock Android 15 first; LineageOS GSI only if stock fights the always-on service or we need cleaner key handling.
+- **ADR-1 Host OS**: rooted stock Android 15 first; LineageOS GSI only if stock fights the always-on service or we need cleaner key handling. — **rooted stock confirmed 2026-11-21** (bootloader unlocked, Magisk 31.1 on init_boot).
 - **ADR-2 Speech backend**: decided by D1.4/D1.5 numbers (Paseo pipeline vs z.ai realtime vs whisper+Kokoro cascade). The gateway interface is designed so backends are swappable behind one protocol.
 - **ADR-3 Code layout**: **standalone new repo** for the Alice app — repo `hey-alice` at `~/projects/hey-alice`. `xagent` (illegal-lion) stays a UI-first launcher; Alice is service-first — foreground service, audio engine, wake word, with a minimal status UI, not a card deck. Port the proven Paseo connection architecture (direct WS + relay E2EE, reconnect, agent-state model) into the new repo as adapted code, not shared Gradle modules — avoid coupling a headless assistant to the launcher's release cycle. Extract a shared connection library later only if divergence cost proves out. Alice connects to a single daemon connection in v1; multi-daemon remerge is launcher-specific and deferred.
 - **ADR-4 Transport codec**: PCM 16 kHz mono on WiFi; Opus 16–24 kbps before 4G field trials (radio-on-time matters on battery).
 - **ADR-5 Security**: device stores daemon bearer credentials in Android Keystore; full-disk encryption on; relay E2EE as first link, Tailscale second; gateway refuses unauthenticated streams.
+- **ADR-6 Side key / hold-to-talk**: side key = power key (`/dev/input/event0`, KEY_POWER); hold ≥ 500 ms → PTT via raw-event capture + RRO disabling power-menu long-press; double press reserved. See §D1.2. Decided 2026-11-21.
 
 ### Voice session protocol (one bidirectional WebSocket per session)
 
@@ -220,7 +245,7 @@ Minimal status UI polish (agent dots, live transcript, error states), set compan
 | # | Risk | Likelihood | Mitigation |
 | --- | --- | --- | --- |
 | R1 | NX1 AEC insufficient → self-barge-in on TTS echo | Medium | D1.3 early; ducking fallback (half-duplex); barge-in requires PTT if AEC fails |
-| R2 | Side key not capturable/remappable | Low–Medium | D1.2 early; volume-key fallback; BT button fallback |
+| R2 | Side key not capturable/remappable | ~~Low–Medium~~ **Closed 2026-11-21** | Raw `/dev/input/event0` capture confirmed working with root; ADR-6 contract decided |
 | R3 | OEM Android kills foreground service despite exemption | Medium | Root-level `pm` exemption, Magisk module; GSI (ADR-1) if stock fights |
 | R4 | Relay/4G jitter breaks streaming feel | Medium | Opus + jitter buffer; Tailscale path as failover (owner priority #2) |
 | R5 | z.ai realtime model absent/costly for always-on | Medium | Cascade baseline is the design default; realtime is an upgrade gate, not a dependency |
@@ -247,6 +272,6 @@ Scaffolded 2026-11-19: repo `hey-alice` at `~/projects/hey-alice`; this document
 ## 9. Immediate next actions
 
 1. ~~Scaffold `hey-alice`~~ — done 2026-11-19 (`~/projects/hey-alice`); remaining: gradle wrapper + first `assembleDebug` inside the devshell.
-2. D1.1 backup + root — **backup DONE 2026-11-20** (`.backups/nx1-20261120-003415/`, VERIFIED with `super.bin` UNVERIFIED warn-level, see `VERIFY-STATUS.md`); Magisk-patched `init_boot` built for both slots. **Remaining: the unlock+root session** — owner present, run `tools/unlock-flash.sh` (runbook in `tools/README.md`), then `verify-root.sh` + `post-root-setup.sh`.
-3. D1.3 audio/AEC spike in parallel (longest technical unknown).
+2. ~~D1.1 backup + root~~ — **M0 COMPLETE 2026-11-21**: backup VERIFIED (`.backups/nx1-20261120-003415/`, super caveat documented), bootloader unlocked (owner-confirmed wipe; wipe switched active slot a→b — both init_boot slots were pre-patched), Magisk 31.1 flashed to init_boot, `verify-root.sh` all gates pass. Battery-optimisation exemption **deferred to M1 first deploy** (com.heyalice APK doesn't exist yet). D1.2 side-key contract resolved (ADR-6).
+3. **Next: D1.3 audio/AEC spike** (longest technical unknown) + M1 voice loop skeleton.
 4. Draft voice-session protocol doc during M1 so M2/M3 build against a written contract.
