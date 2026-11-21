@@ -8,6 +8,10 @@
 !.backups/nx1-*/SUPER-TIEBREAK.txt
 !.backups/nx1-*/VOLATILE-HASHES.txt
 
+# Device capture logs (raw getevent etc.) — the keycode contract lives in
+# docs/plan.md, not in raw logs.
+logs/
+
 # Nix build outputs
 result
 result-*
