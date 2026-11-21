@@ -60,7 +60,7 @@ sidekey_log() {
   echo "about 2 s apart:  short · long-hold · double-press"
   echo "------------------------------------------------------------------"
   log "capturing getevent -lt for ${secs}s → $logfile"
-  timeout "$secs" adb shell getevent -lt /dev/input/event* | tee "$logfile" || true
+  timeout "$secs" adb shell "getevent -lt /dev/input/event*" | tee "$logfile" || true
   log "events captured: $(grep -c EV_ "$logfile" || true)"
   log "key lines (non-touch):"
   grep -E "KEY_|BTN_" "$logfile" | grep -v BTN_TOUCH | sort | uniq -c | sort -rn | head -20 || true
