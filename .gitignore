@@ -12,6 +12,16 @@
 # docs/plan.md, not in raw logs.
 logs/
 
+# Gradle / Android build outputs
+.gradle/
+build/
+app/build/
+overlay/build/
+
+# Gateway python venv
+.venv/
+gateway/.venv/
+
 # Nix build outputs
 result
 result-*
