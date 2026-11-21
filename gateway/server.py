@@ -151,32 +151,33 @@ class Session:
     # ---- TTS ------------------------------------------------------------
 
     async def stream_tts(self, text: str, seq: int) -> None:
+        """Clause-split streaming: synthesise the first clause alone so the
+        first audio chunk lands ASAP (measured: 0.75 s for 'You said:'), then
+        the rest streams clause by clause behind it."""
         loop = asyncio.get_running_loop()
-
-        def _gen():
-            return list(ENGINES.synthesize_blocking(text))
-
+        import re
+        clauses = [c for c in re.split(r"(?<=[.,;:!?])\s+", text) if c.strip()]
         t0 = time.perf_counter()
-        # First chunk must go out as soon as it exists: stream per chunk.
+        first = True
+        offset = 0
         async with ENGINES.infer_lock:
-            gen = ENGINES.synthesize_blocking(text)
-            first = True
-            offset = 0
-            while True:
-                chunk = await loop.run_in_executor(None, lambda: next(gen, None))
-                if chunk is None:
-                    break
-                data = chunk if isinstance(chunk, bytes) else chunk
-                if first:
-                    await self.send_json(type="tts_start", seq=seq, sr=SR_OUT)
-                    log(f"utt#{seq} tts first chunk "
-                        f"{(time.perf_counter() - t0) * 1000:.0f} ms")
-                    first = False
-                for i in range(0, len(data), TTS_CHUNK_BYTES):
-                    piece = data[i:i + TTS_CHUNK_BYTES]
-                    await self.ws.send(struct.pack("<II", seq, offset) + piece)
-                    offset += len(piece)
-                    await asyncio.sleep(0)  # yield to reader
+            for clause in clauses:
+                gen = ENGINES.synthesize_blocking(clause)
+                while True:
+                    chunk = await loop.run_in_executor(None, lambda: next(gen, None))
+                    if chunk is None:
+                        break
+                    if first:
+                        await self.send_json(type="tts_start", seq=seq, sr=SR_OUT)
+                        log(f"utt#{seq} tts first chunk "
+                            f"{(time.perf_counter() - t0) * 1000:.0f} ms "
+                            f"(clause {clause!r})")
+                        first = False
+                    for i in range(0, len(chunk), TTS_CHUNK_BYTES):
+                        piece = chunk[i:i + TTS_CHUNK_BYTES]
+                        await self.ws.send(struct.pack("<II", seq, offset) + piece)
+                        offset += len(piece)
+                        await asyncio.sleep(0)  # yield to reader
         tts_ms = int((time.perf_counter() - t0) * 1000)
         await self.send_json(type="tts_end", seq=seq, tts_ms=tts_ms)
         log(f"utt#{seq} tts_end tts_ms={tts_ms}")

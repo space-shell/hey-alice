@@ -1,8 +1,11 @@
-# Voice gateway deps (plan M1/M2). Versions pinned at M1 once the backend
-# decision (ADR-2) is made from the D1.4/D1.5 audit numbers.
-faster-whisper>=1.0
-kokoro>=0.9
-websockets>=13
-numpy
-soundfile
-onnxruntime
+# Voice gateway deps — PINNED at M1 (2026-11-21, python3.12 devshell).
+# Resolved on the 4-core CPU host; torch is the CPU wheel. Full transitive
+# freeze recorded in requirements.lock.txt for reproduction.
+
+faster-whisper==1.2.1
+kokoro==0.9.4
+websockets==17.4
+numpy==2.5.5
+soundfile==0.14.0
+onnxruntime==1.32.0
+torch==2.15.0
