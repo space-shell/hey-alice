@@ -86,6 +86,10 @@ Nothing device-side yet. Research only, from the TrebleDroid/treble_experimentat
 - **D1.2 side-key contract captured** → ADR-6 in `docs/plan.md` §D1.2 (side
   key = power key, hold ≥500 ms → PTT, raw `/dev/input/event0` capture).
   Raw logs: `logs/sidekey-*.log` (gitignored).
+- **Stage-2 addendum (2026-11-21)**: `adb reboot` does NOT auto-boot the NX1 —
+  it powers off and stays dark until a physical POWER press (~10 s). Not a
+  Magisk problem: root survives (verified `su -c id` post-recovery). USB tends
+  to unseat during the hold — replug. Full note in `docs/plan.md` §5 M0.
 
 ## Constraints
 

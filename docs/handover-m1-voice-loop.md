@@ -27,7 +27,13 @@ Resolution order (with the owner, who is co-located):
 
 ## Current state
 
-- **Device**: rooted NX1 (Magisk 31.1, 8/8 verify gates passed), bootloader unlocked, currently UNRESPONSIVE (see above). When alive: serial `TLF2601S000307`, Android 15, slot `b`, `com.android.shell` has a Magisk superuser grant (su works over adb), Alice skeleton APK installed, `com.heyalice` in deviceidle whitelist, Magisk app installed.
+- **RESOLVED 2026-11-21 ~09:30**: the dark device was the benign case — after
+  `adb reboot` the NX1 does not auto-boot; it needs a physical POWER press
+  (~10 s). Owner pressed; device booted; root intact (`su -c id` →
+  `uid=0(root) … u:r:magisk:s0`). Project rule: after any reboot the owner
+  powers the device on, and expect to replug USB (it comes loose during the
+  hold). Quirk recorded in `docs/plan.md` §5 M0 and `.backups/…/VERIFY-STATUS.md`.
+- **Device**: rooted NX1 (Magisk 31.1, 8/8 verify gates passed), bootloader unlocked, serial `TLF2601S000307`, Android 15, slot `b`, `com.android.shell` has a Magisk superuser grant (su works over adb), Alice skeleton APK installed, Magisk app installed (battery-exempt still deferred to this stage).
 - **Build pipeline**: SDK at `~/Android/Sdk` (platform 35, build-tools 34/35), gradle wrapper committed, `./gradlew :app:assembleDebug` works (~90 s incremental) — run from repo root in the ROOT flake devshell (`nix develop -c ...`), NOT from tools/ (that's the bring-up flake: no java).
 - **Commits**: main has stage-1 history (14+ commits) + docs closure (ADR-6 accepted: hold-to-talk = raw `/dev/input/event0` + ≥500 ms hold detection via su + root-installed RRO disabling framework power-menu; side key IS the power key, `KEY_POWER` on `mtk-pmic-keys`).
 - **Known device quirks** (all documented in VERIFY-STATUS.md + stage-1 report): Magisk auto-denies su prompts while the screen is locked — keep screen on (`svc power stayon usb`) during capture windows; the phone's `getevent` rejects multiple device args; flaky USB link historically (super.bin read instability) — prefer wired stability and keep sessions short.

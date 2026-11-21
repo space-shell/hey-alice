@@ -194,6 +194,16 @@ IDLE ──wake/PTT──▶ CAPTURING ──endpoint──▶ TRANSCRIBING ─�
 Backup, unlock, root, battery-optimisation exemption, ADB-over-WiFi.
 **Exit**: D1.1 complete; device survives reboot loop test and rollback rehearsal.
 
+**Device quirk (found 2026-11-21, stage 2): `adb reboot` does NOT auto-boot the
+NX1.** The device powers off and stays dark (no USB enumeration in any mode)
+until someone physically presses POWER ~10 s. Not a Magisk/bootloop problem —
+root survives the reboot fine once booted. Project rule: after any reboot, ask
+the owner to power-press; also expect the USB cable to come loose during the
+hold — replug before adb will see the device. Reboot-survival evidence:
+2026-11-21 ~08:50 `adb reboot` → dark ~40 min → owner POWER press →
+`su -c id` = `uid=0(root) … context=u:r:magisk:s0`. Second deliberate test
+pending (M1 checklist).
+
 ### M1 — Voice loop skeleton (the riskiest integration first; ≈1 week)
 New `alice` repo: service-first Android app skeleton. Throwaway UI: PTT (side key or on-screen) → AudioRecord → WS → server STT → TTS → AudioTrack.
 Server: minimal gateway (Python, flake.nix devshell) with faster-whisper + Kokoro, PCM in/out. Before building the gateway from scratch, audit existing owner projects for reusable pieces: `dictation-transcription`, `nemotron-voice-input`, `talk-journal` (all in `~/projects`).
