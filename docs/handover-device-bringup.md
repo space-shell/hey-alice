@@ -61,9 +61,35 @@ Nothing device-side yet. Research only, from the TrebleDroid/treble_experimentat
 - [x] Commit little, commit often — each deliverable its own commit on `main`
 - [x] Final report: delivered 2026-11-20 (hash summary, unlock-session runbook, open questions)
 
+## Session outcome — unlock+root session 2026-11-21 (device work COMPLETE)
+
+- **Bootloader unlocked** (`unlocked: yes`), wipe done, owner-confirmed. The
+  wipe switched the active slot **a → b** — both init_boot slots were
+  pre-patched, so no re-patch was needed; `unlock-flash.sh` picked slot b via
+  `fastboot getvar current-slot`.
+- **Rooted**: Magisk 31.1 flashed to init_boot (slot b). `verify-root.sh`:
+  **all gates pass** (needed a one-line fix: glued statement → unbound var
+  under `set -u`, committed).
+- **Script fixes made during the session** (all committed): `unlock-flash.sh`
+  honors `UNLOCK_CONFIRMED` at the pre-unlock confirm, tolerates a rerun while
+  already in fastboot, and `getvar` parses are filtered to their variable line
+  (the fastboot timing line `0.000s` was poisoning value comparisons — caused
+  one safe-abort). `post-root-setup.sh`: getevent device glob expanded on host
+  instead of device, and the phone's getevent rejects multiple device args —
+  now a pathless capture.
+- **Battery-exempt deferred** to M1 first deploy: `com.heyalice` isn't
+  installed yet (no APK built) — noted in `docs/plan.md` §9.
+- **Magisk app installed on device** (v31.1); root grant for
+  `com.android.shell` added manually via the app UI (Superuser → + → Shell).
+  Doc note: Magisk auto-denies `su` prompts while the screen is locked —
+  capture windows must keep the screen on.
+- **D1.2 side-key contract captured** → ADR-6 in `docs/plan.md` §D1.2 (side
+  key = power key, hold ≥500 ms → PTT, raw `/dev/input/event0` capture).
+  Raw logs: `logs/sidekey-*.log` (gitignored).
+
 ## Constraints
 
-- **Never** run `fastboot flashing unlock`, `fastboot flash`, or any mtkclient write in this run. Read-only against the device, always.
+- **Read-only constraint LIFTED 2026-11-21**: the unlock+root session ran with owner present and completed the write path (`fastboot flashing unlock`, init_boot flash). The backup (`.backups/nx1-20261120-003415/`, VERIFIED) remains the restore reference — any future write session should re-confirm against it first.
 - **No sudo.** udev/adb rules are the owner's NixOS config change. Suggested snippet for their config (they rebuild + re-login):
   ```nix
   programs.adb.enable = true;
