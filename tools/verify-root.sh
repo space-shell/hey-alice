@@ -27,7 +27,8 @@ failf() { echo "FAIL: $*"; fail=1; }
 command -v adb >/dev/null || { echo "FATAL: run inside tools devshell (nix develop)"; exit 2; }
 
 adb get-state >/dev/null 2>&1 || adb wait-for-device
-state="$(adb get-state 2>/dev/null)"[ "$state" = "device" ] && pass "adb device online" || failf "adb state is '$state'"
+state="$(adb get-state 2>/dev/null)"
+[ "$state" = "device" ] && pass "adb device online" || failf "adb state is '$state'"
 
 boot_completed="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
 [ "$boot_completed" = "1" ] && pass "boot completed" || failf "sys.boot_completed=$boot_completed (bootloop? see tools/README.md → recovery)"
