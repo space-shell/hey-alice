@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # setup-sdk.sh — one-time Android SDK bootstrap for building the hey-alice app.
-# Run inside the tools devshell (needs jdk17): nix develop -c ../tools/setup-sdk.sh
+# Run inside the ROOT flake's app devshell (has jdk17+gradle):
+#   cd ~/projects/hey-alice && nix develop -c bash tools/setup-sdk.sh
+# (Do NOT run from tools/ — that flake is the bring-up shell: adb/fastboot/mtkclient.)
 set -euo pipefail
 
 SDK="${ANDROID_HOME:-$HOME/Android/Sdk}"
