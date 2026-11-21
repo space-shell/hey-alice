@@ -10,7 +10,7 @@
     in {
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
-          (python312.withPackages (ps: [ ps.venvShellHook ]))
+          (python312.withPackages (ps: with ps; [ venvShellHook pip ]))
           espeak-ng    # phonemiser used by Kokoro TTS
           git
         ];
