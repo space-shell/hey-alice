@@ -43,5 +43,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 
     // TODO(M1): ONNX Runtime (openWakeWord + Silero VAD), Opus encoder (ADR-4)
-    // TODO(M3): WebSocket client for Paseo daemon + relay E2EE (adapted from xagent)
+    // TODO(M3): Paseo daemon WS client + relay E2EE (adapted from xagent)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

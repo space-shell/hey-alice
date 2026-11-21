@@ -1,21 +1,23 @@
 package com.heyalice
 
 import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 
 /**
- * Always-on foreground service: owns the audio engine, wake word listener, VAD,
- * and the voice session state machine. The docked profile keeps this running
- * indefinitely; the battery-optimisation exemption is granted at M0 bring-up.
+ * Always-on foreground service: owns [AliceRuntime] (audio engine, PTT side
+ * key, gateway client). Battery-exempted at M0; docked profile keeps this
+ * running indefinitely.
  */
 class AliceService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        // TODO(M1): start AudioEngine (full-duplex) + PTT side-key capture (D1.2)
-        // TODO(M4): wake word armed (docked profile), attention dots via status UI
+        channel()
+        AliceRuntime.start(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -23,14 +25,29 @@ class AliceService : Service() {
         return START_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun buildNotification(): Notification {
-        // TODO(M1): notification channel + "Alice is listening" content
-        return Notification.Builder(this).build()
+    override fun onDestroy() {
+        AliceRuntime.disconnect()
+        super.onDestroy()
     }
 
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun channel() {
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "Alice voice", NotificationManager.IMPORTANCE_LOW))
+    }
+
+    private fun buildNotification(): Notification =
+        Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentTitle("Alice")
+            .setContentText("Voice loop running — hold the side key to talk")
+            .setOngoing(true)
+            .build()
+
     companion object {
+        private const val CHANNEL_ID = "alice_voice"
         private const val NOTIFICATION_ID = 1
     }
 }
