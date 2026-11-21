@@ -14,6 +14,8 @@
           gradle
           android-tools   # adb / fastboot — NX1 bring-up (plan D1.x)
           scrcpy
+          curl
+          unzip           # SDK bootstrap (tools/setup-sdk.sh)
         ];
 
         shellHook = ''
