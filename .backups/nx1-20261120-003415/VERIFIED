@@ -1,4 +1,0 @@
-verified 2026-11-20T13:49:49+01:00 with mtkclient 2.1.4.1; final offline closure after verify session:
-  2-pass exact: flash-critical set (boot_a/b, init_boot_a/b, vbmeta_a/b, vendor_boot_a/b, lk_a/b, tee_a/b, gpt, gpt_backup, seccfg, proinfo) + preloader-boot1 (eMMC Boot1)
-  volatile skipped (8): expdb metadata misc nvcfg nvdata persist protect1 protect2 — see VOLATILE-HASHES.txt
-  super.bin: UNVERIFIED (no majority across 3 reads) — see SUPER-TIEBREAK.txt; WARN-level, does not affect init_boot flashing

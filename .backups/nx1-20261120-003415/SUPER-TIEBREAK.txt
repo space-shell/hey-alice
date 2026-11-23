@@ -1,6 +1,0 @@
-super.bin tie-break — 2026-11-20T13:46:39+01:00
-expected size: 9663676416
-read1 (manifest + on disk): 8f29211ef6cb14ef6079d32001888b8286a44129fb13a736f235c595041c9bfa  (9663676416 B)
-read2 (verify re-read):     d06193ef01d4014af889623160eef03a977fd9bb12aec3152c17d4232fb260d2  (9663676416 B)
-read3 (tie-break):          7c62f84766c58c52a5027ee4ac2700a470f78d0ae469188381ebed47b23c1729  (9663676416 B)
-verdict: SUPER UNVERIFIED — reads disagree with no majority; read#1 file kept; WARN-level (super restore carries risk; init_boot flashing unaffected)
