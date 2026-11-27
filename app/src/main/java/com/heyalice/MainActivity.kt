@@ -56,6 +56,11 @@ class MainActivity : ComponentActivity() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
             PackageManager.PERMISSION_GRANTED) micPermission.launch(
                 Manifest.permission.RECORD_AUDIO)
+        // D1.3/ADR-6 debug: what does the composed framework actually resolve?
+        val rid = resources.getIdentifier(
+            "config_longPressOnPowerBehavior", "integer", "android")
+        android.util.Log.i("AliceUI",
+            "resolved config_longPressOnPowerBehavior=${resources.getInteger(rid)}")
         // Service-first (plan ADR-3): the service owns the loop; the UI observes.
         startForegroundService(Intent(this, AliceService::class.java))
         setContent {

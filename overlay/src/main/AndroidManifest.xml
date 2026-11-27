@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Runtime overlay onto framework-res; enabled via `cmd overlay enable`
-         after root preinstall to /product/overlay (user installs fail the
-         platform-signature check). -->
+    <!-- Runtime overlay onto framework-res; isStatic so PWM's boot-time
+         readConfigurationDependentBehaviors() sees it. Verified on-device
+         2026-11-27: mutable-enabled overlays register too late for
+         system_server's first config read (app contexts resolved 0 while
+         PWM kept GLOBAL_ACTIONS after framework restarts); static + kernel
+         reboot fixed it. Magisk bind mounts only refresh on kernel boot. -->
     <overlay
         android:targetPackage="android"
+        android:isStatic="true"
         android:priority="999" />
 
     <application
