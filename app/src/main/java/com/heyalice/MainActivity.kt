@@ -109,6 +109,7 @@ private fun StatusScreen() {
                     modifier = Modifier.weight(1f),
                     singleLine = true)
                 Button(onClick = {
+                    android.util.Log.i("AliceUI", "connect clicked: $url")
                     ctx.getSharedPreferences("alice", 0).edit()
                         .putString("gateway", url).apply()
                     AliceRuntime.connectGateway(url)

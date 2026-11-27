@@ -128,7 +128,11 @@ object AliceRuntime {
 
             override fun onClosed() {
                 connected = false
-                connection.value = "disconnected"
+                // keep a just-logged failure visible: onClosed must not clobber
+                // the error the user needs to see (found 2026-11-27 — every
+                // failed connect looked like a dead button)
+                if (!connection.value.startsWith("error"))
+                    connection.value = "disconnected"
                 toIdle()
             }
         }).also { it.connect(url) }
