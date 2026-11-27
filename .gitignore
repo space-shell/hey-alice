@@ -22,6 +22,9 @@ overlay/build/
 .venv/
 gateway/.venv/
 
+# Gateway local test audio (regenerable STT inputs / TTS outputs)
+gateway/*.wav
+
 # Nix build outputs
 result
 result-*
