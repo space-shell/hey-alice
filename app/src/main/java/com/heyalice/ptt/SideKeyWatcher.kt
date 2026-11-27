@@ -47,6 +47,10 @@ class SideKeyWatcher(
                 .redirectErrorStream(false)
                 .start()
             process = p
+            // set running BEFORE the thread starts: the loop condition reads it,
+            // and a thread that exits instantly must still surface its error
+            // (tracker F3 — flag-after-start silently killed PTT)
+            running = true
             reader = Thread({
                 try {
                     parseLoop(p.inputStream)
@@ -54,9 +58,9 @@ class SideKeyWatcher(
                     if (running) onError("event0 reader failed: ${e.message}")
                 }
             }, "alice-sidekey-read").apply { start() }
-            running = true
             Log.i(TAG, "watching /dev/input/event0 via su")
         } catch (e: Exception) {
+            running = false
             onError("su cat /dev/input/event0 failed: ${e.message} — " +
                 "grant com.heyalice in Magisk (screen must be unlocked)")
         }

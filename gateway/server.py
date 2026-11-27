@@ -150,9 +150,12 @@ class Session:
                 _, stream, data = item
                 if stream in self.aborted:
                     continue          # drop queued frames of aborted streams
-                await self.ws.send(data)
             else:
-                await self.ws.send(item[1])
+                data = item[1]
+            try:
+                await self.ws.send(data)
+            except websockets.ConnectionClosed:
+                return                # client gone mid-drain (normal close)
 
     async def put_json(self, **msg) -> None:
         if not self.closed:

@@ -14,7 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
  * Process-wide runtime owned by [AliceService]: full-duplex audio + PTT
@@ -56,9 +55,10 @@ object AliceRuntime {
     @Volatile private var tRelease = 0L
     @Volatile private var ttsFirstAt = 0L
 
-    // AEC-test clip collection (D1.3): when set, TTS chunks are captured here.
-    @Volatile private var clipCollector: ByteArray? = null
-    private val clipBuffer = java.util.concurrent.ConcurrentLinkedQueue<ByteArray>()
+    // AEC-test clip collection (D1.3): when the probe is collecting, TTS chunks
+    // route into it instead of the playback engine (tracker C7/F4).
+    private var aecProbe: com.heyalice.debug.AecProbe? = null
+    @Volatile private var lastTtsSr = 24_000
 
     @SuppressLint("MissingPermission")
     fun start(ctx: Context) {
@@ -86,6 +86,7 @@ object AliceRuntime {
         client = GatewayClient(object : GatewayClient.Listener {
             override fun onReady(sttModel: String, ttsVoice: String, ttsSr: Int) {
                 connected = true
+                lastTtsSr = ttsSr
                 gatewayInfo.value = "$sttModel / $ttsVoice / ${ttsSr}Hz"
                 connection.value = "connected"
                 scope.launch { startAudio(ttsSr) }
@@ -102,18 +103,16 @@ object AliceRuntime {
             }
 
             override fun onTtsChunk(seq: Int, offset: Int, pcm: ByteArray, tFirst: Long?) {
-                val collector = clipCollector
-                if (collector != null) {
-                    if (tFirst != null && clipBuffer.isEmpty()) clipBuffer.add(pcm)
-                    else clipBuffer.add(pcm)
-                    if (tFirst != null && ttsFirstAt == 0L) ttsFirstAt = tFirst
-                } else {
-                    engine.enqueueTts(pcm)
-                    if (tFirst != null && ttsFirstAt == 0L) {
-                        ttsFirstAt = tFirst
-                        latency.value = latency.value?.copy(
-                            ttsFirstMs = tFirst - tRelease)
-                    }
+                val probe = aecProbe
+                if (probe != null && probe.isCollecting) {
+                    probe.acceptChunk(pcm)
+                    return
+                }
+                engine.enqueueTts(pcm)
+                if (tFirst != null && ttsFirstAt == 0L) {
+                    ttsFirstAt = tFirst
+                    latency.value = latency.value?.copy(
+                        ttsFirstMs = tFirst - tRelease)
                 }
             }
 
@@ -182,101 +181,18 @@ object AliceRuntime {
 
     // ---- D1.3 AEC test -------------------------------------------------------
 
-    /**
-     * Three capture passes (VOICE_COMMUNICATION / MIC / UNPROCESSED) with a
-     * fixed TTS clip played through the normal playback path at t=2 s.
-     * WAVs land in getExternalFilesDir("aec"); pull via root cat.
-     */
-    @SuppressLint("MissingPermission")
+    /** Harness lives in debug/AecProbe.kt (tracker C7); onRestore restarts the
+     *  normal audio path after the passes (tracker F4 — the engine used to be
+     *  left stopped, killing PTT until reconnect). */
     fun runAecTest() {
         if (!connected) { aecStatus.value = "connect the gateway first"; return }
-        scope.launch {
-            try {
-                aecStatus.value = "synthesising test clip…"
-                val clip = fetchClip() ?: run {
-                    aecStatus.value = "clip fetch failed"; return@launch }
-                val dir = File(appContext.getExternalFilesDir(null), "aec").apply {
-                    mkdirs() }
-                val sources = listOf(
-                    "VOICE_COMMUNICATION" to MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                    "MIC" to MediaRecorder.AudioSource.MIC,
-                    "UNPROCESSED" to MediaRecorder.AudioSource.UNPROCESSED)
-                val results = mutableListOf<String>()
-                for ((name, src) in sources) {
-                    aecStatus.value = "pass $name …"
-                    val info = capturePass(name, src, clip, dir)
-                    results.add("$name: aecAvail=${info.aecAvailable} " +
-                        "attached=${info.aecAttached} enabled=${info.aecEnabled} " +
-                        "nsAvail=${info.nsAvailable} attached=${info.nsAttached}")
-                }
-                aecStatus.value = results.joinToString("\n") +
-                    "\nfiles: ${dir.absolutePath}"
-                Log.i(TAG, "AEC test done: $results")
-            } catch (e: Exception) {
-                aecStatus.value = "AEC test failed: ${e.message}"
-                Log.e(TAG, "AEC test failed", e)
-            }
-        }
-    }
-
-    private fun fetchClip(): ByteArray? {
-        clipBuffer.clear()
-        val done = java.util.concurrent.Semaphore(0)
-        // reuse the TTS chunk path: redirect chunks into clipBuffer
-        clipCollector = ByteArray(0)
-        client?.sendTtsRequest("The quick brown fox jumps over the lazy dog. " +
-            "The rain in Spain falls mainly on the plain.")
-        // drain: watch clipBuffer growth until the tts_end arrives — poll size
-        var lastSize = -1; var stable = 0
-        val t0 = SystemClock.elapsedRealtime()
-        while (SystemClock.elapsedRealtime() - t0 < 30_000) {
-            Thread.sleep(300)
-            val s = clipBuffer.sumOf { it.size }
-            if (s == lastSize) stable++ else stable = 0
-            lastSize = s
-            if (s > 0 && stable >= 10) break  // 3 s no-growth
-        }
-        clipCollector = null
-        if (clipBuffer.isEmpty()) return null
-        val total = clipBuffer.sumOf { it.size }
-        val out = ByteArray(total)
-        var o = 0
-        while (clipBuffer.isNotEmpty()) {
-            val b = clipBuffer.poll()!!
-            System.arraycopy(b, 0, out, o, b.size); o += b.size
-        }
-        return out
-    }
-
-    private fun capturePass(
-        name: String, source: Int, clip: ByteArray, dir: File,
-    ): AudioEngine.EffectsInfo {
-        engine.stopCapture(); engine.stopPlayback()
-        val collected = ArrayList<ByteArray>()
-        val info = engine.startCapture(source, object : AudioEngine.FrameSink {
-            override fun onFrame(pcm: ByteArray) { collected.add(pcm) }
-        })
-        engine.startPlayback(volume = 0.8f)
-        engine.startFrameFlow()
-        try {
-            // 2 s baseline, then play the clip; clip ≈ 6 s; 10 s total window
-            Thread.sleep(2_000)
-            engine.enqueueTts(clip)
-            engine.flushAndNotifyDrain()
-            val t0 = SystemClock.elapsedRealtime()
-            while (SystemClock.elapsedRealtime() - t0 < 8_000 &&
-                collected.size < 10 * 50) Thread.sleep(100)
-        } finally {
-            engine.stopFrameFlow()
-            engine.stopCapture()
-            engine.stopPlayback()
-        }
-        val data = ByteArray(collected.size * engine.frameBytes)
-        collected.forEachIndexed { i, f ->
-            System.arraycopy(f, 0, data, i * engine.frameBytes, engine.frameBytes) }
-        val f = File(dir, "pass_${name}.wav")
-        engine.writeWav(f.outputStream(), data, 16_000)
-        Log.i(TAG, "AEC pass $name -> ${f.absolutePath} (${data.size} B)")
-        return info
+        val probe = aecProbe ?: com.heyalice.debug.AecProbe(
+            engine = engine,
+            appContext = appContext,
+            requestClip = { text -> client?.sendTtsRequest(text) },
+            setStatus = { aecStatus.value = it },
+            onRestore = { if (connected) startAudio(lastTtsSr) },
+        ).also { aecProbe = it }
+        probe.run()
     }
 }
