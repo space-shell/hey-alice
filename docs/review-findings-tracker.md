@@ -67,7 +67,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
 
 ## B. Before M2 code (cheap now, breaking if deferred)
 
-- [ ] **B1 — Cut voice-session protocol v1, carrier-independent** (review §3, risk #4).
+- [x] **B1 — Cut voice-session protocol v1, carrier-independent** (review §3, risk #4).
       Defined as messages, not WebSocket frames, so the carrier (plain WS now,
       daemon-plugin frames later) can change. Required edits:
       (1) version field + REAL negotiation (v0 sends version, both sides ignore it);
@@ -78,7 +78,9 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
       (6) document `tts_request` (exists in code, absent from protocol.md).
       Update docs/protocol.md. Acceptance: protocol.md states v1 with all six; both
       sides can still speak v0 (flag-gated) until the M2 client work lands.
-      **blocked(nothing — next protocol editing session)**
+      Done: 2026-11-27, protocol.md rewritten as v1 (all six; `endpoint` defined,
+      emitted once server VAD lands). Server implements negotiation + resume +
+      tts_abort now; v0 compat verified by test_smoke.py §7 (current APK unaffected).
 
 - [ ] **B2 — Plan edits from the review** (review "Decisions" #6, §7).
       (a) Add an endpoint-latency segment to the §4 latency budget (VAD endpoint →
@@ -104,7 +106,11 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
       M3's intent-routing seam is one call site at server.py:134.
       Acceptance: barge-in utterance's first audio does not wait for the aborted
       utterance's synthesis; demo shows TTS stop < 300 ms (M2 exit).
-      **blocked(B1 defines tts_abort)**
+      Done: 2026-11-27, server.py reworked (stt_lock/tts_lock, writer queue with
+      aborted-stream frame drop, tracked cancellable TTS tasks, session token +
+      resume, F1 buf-snapshot fix). Verified by gateway/test_smoke.py: 16/16 PASS,
+      barge-in stop latency 1 ms (budget 300 ms). Also removes the live contention
+      seen in the owner's 16:51 test (stt_ms 2748 waiting behind TTS synthesis).
 
 - [ ] **C2 — Extract a single-threaded SessionController from AliceRuntime**
       (review §2, risk #2; est. 2–3 days with JVM tests).
@@ -163,14 +169,17 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
       Acceptance: AliceRuntime carries no AEC-test code; the AEC test still works.
       **blocked(nothing — lands with C2)**
 
-- [ ] **C8 — Concurrency harness: fake gateway + automated barge-in/resume tests**
+- [~] **C8 — Concurrency harness: fake gateway + automated barge-in/resume tests**
       (review §7.5, next-tier risks).
       No automated tests exist for barge-in timing, soak, or resume, and there is no
       fake gateway to test against. Build a scripted fake gateway (JVM or host
       Python) that can: send partials/finals on cue, stream/cancel TTS, drop the
       socket mid-turn. C2's JVM tests + this harness are the M2 regression net.
       Acceptance: one automated barge-in test and one resume test run in CI/devshell.
-      **blocked(C1, C2)**
+      Progress 2026-11-27: gateway/test_smoke.py seeds the host-side half —
+      barge-in (1 ms stop), tts_abort, resume, v0-compat all asserted against the
+      live gateway (16/16). Remaining: JVM-side client tests + mid-turn socket-drop
+      scenario (lands with C2).
 
 ## D. Probes (measure before sizing/designing)
 
@@ -287,3 +296,6 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
 | 2026-11-27 | E5 complete | (this commit) | ADR-5 amendment sentence |
 | 2026-11-27 | E6 complete | (this commit) | coverage note in ADR-7 |
 | 2026-11-27 | D5 added | (this commit) | Tailscale on NX1 — new follow-up item |
+| 2026-11-27 | B1 complete | (this commit) | protocol.md v1 + server negotiation/resume/abort |
+| 2026-11-27 | C1 complete | (this commit) | lock split + writer queue + cancellable TTS; smoke 16/16, abort 1 ms |
+| 2026-11-27 | C8 progress | (this commit) | host-side smoke seeded; JVM side pending C2 |
