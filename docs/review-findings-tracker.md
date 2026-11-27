@@ -20,7 +20,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
 
 ## A. Owner decisions (gate everything below)
 
-- [ ] **A1 — ADR-7: voice transport off the LAN** (review §1, §6b, risk #1).
+- [x] **A1 — ADR-7: voice transport off the LAN** (review §1, §6b, risk #1).
       The Paseo relay carries only the daemon's own protocol — the voice gateway has
       NO relay path, so M3's "all five intents work over relay" and M5's 4G trial
       cannot pass as the plan reads today. Options:
@@ -30,15 +30,31 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
               binary frames (the only true "relay first" path; unverified — needs
               the PRB-1 spike, 50 msg/s through the relay).
       Decision + recorded ADR-7 gates M3 exit criteria and M5 design.
-      **blocked(owner choice; PRB-1 spike supplies the numbers)**
+      **Decision 2026-11-27: option A — Tailscale, owner choice, explicitly revisitable.**
+      Recorded as ADR-7 in plan.md (revisit trigger + D4 spike noted there).
+      Done: 2026-11-27, plan.md ADR-7.
+- [ ] **D5 — Install Tailscale on the NX1 + join the tailnet** (follows A1).
+      Required before any off-LAN voice work (M3/M5); NOT needed for LAN M2.
+      Sideload the Tailscale APK (adb install; login needs an owner tap/browser
+      auth on the device), point the app's gateway URL at the server's tailscale
+      IP (100.127.193.39) when off-LAN use starts. Note: server firewall already
+      trusts tailscale0 (services.nix trustedInterfaces).
+      **blocked(owner co-located for login tap; low priority until M3)**
 
-- [ ] **A2 — ADR-8: intent-orchestration location** (review §1, "Decisions" #3).
+- [x] **A2 — ADR-8: intent-orchestration location** (review §1, "Decisions" #3).
       Reviewer recommendation: deterministic grammar runs in the app, with
       optimistic spoken acks ("sent to X") and a defined speech-queue policy.
       Alternative: routing in the gateway. Confirm location before M3; record ADR-8.
-      **blocked(owner confirm)**
+      **Decision 2026-11-27: owner delegated to the review recommendation — grammar
+      in the app.** Plain-language note for the owner: "intent routing" is what
+      decides what a spoken command MEANS ("note: buy milk" → create a note
+      session; "status" → query agents; "tell X to …" → send a prompt). v1 uses a
+      fixed pattern-matcher (no LLM), and ADR-8 places it inside the Android app
+      where agent state lives, so spoken acks fire immediately and the gateway
+      stays a pure speech pipe. Recorded as ADR-8 in plan.md.
+      Done: 2026-11-27, plan.md ADR-8.
 
-- [ ] **A3 — ADR-2 closure / D1.4 output** (review §1 F2, "Decisions" #2).
+- [x] **A3 — ADR-2 closure / D1.4 output** (review §1 F2, "Decisions" #2).
       Record on evidence: Paseo v0.15.3's speech stack cannot replace the cascade —
       audio is base64-in-JSON; TTS ships whole segments (≤260 chars) so first audio
       waits for the full segment; TTS exists only as an agent `speak` tool (no
@@ -46,7 +62,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
       opposite of the deterministic grammar. Cascade (faster-whisper + Kokoro behind
       the gateway) is the v1 backend. D1.5 (z.ai realtime) stays open, scoped to
       M2's partial-transcript design only.
-      **blocked(nothing — just plan/ADR edits; do with the next plan update)**
+      Done: 2026-11-27, plan.md §D1.4 marked RESOLVED with the evidence; §8
+      decisions log updated.
 
 ## B. Before M2 code (cheap now, breaking if deferred)
 
@@ -72,7 +89,9 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
       60 s, no touch".
       (d) Mark D1.4 resolved (per A3).
       Acceptance: plan.md updated; done together with A1–A3.
-      **blocked(A1 for b/c)**
+      **Partial: (b) and (d) done 2026-11-27 (plan.md M3 exit + §6.4 + §D1.4).
+      Remaining: (a) endpoint-latency segment — needs M2 VAD numbers, do during
+      M2 planning; (c) always-on milestone scoping — needs D1 probe results.**
 
 ## C. M2 implementation (the review's "fix at M2 start" set)
 
@@ -184,7 +203,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
       Time-boxed spike: can the Paseo relay carry 50 msg/s (20 ms PCM frames + JSON
       control) through a daemon plugin's binary frames without unbounded latency?
       Output: numbers → A1 decision. Skip entirely if the owner picks option A.
-      **blocked(A1 direction — run only if B2 is still a candidate)**
+      **SKIPPED 2026-11-27: A1 resolved to option A (Tailscale). Only revisit if
+      ADR-7's revisit trigger fires.**
 
 ## E. M3 items (record now, do in the M3 port)
 
@@ -219,21 +239,21 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
       (E1) holds it.
       **blocked(M3 start; ops task on jn-server)**
 
-- [ ] **E5 — Root-equivalent app rule in ADR-5** (review §6c).
+- [x] **E5 — Root-equivalent app rule in ADR-5** (review §6c).
       The app holds a Magisk root grant (SideKeyWatcher execs su); anything it
       loads at runtime runs with that grant reachable. Rule: all models (ONNX for
       VAD/wake word, M2/M4) are bundled in the APK — no runtime fetch over an
       unauthenticated channel. One sentence in ADR-5, now.
-      **blocked(nothing — ADR edit)**
-
-- [ ] **E6 — E2EE coverage note: voice leg ≠ RPC leg** (review §6b).
+      Done: 2026-11-27, plan.md ADR-5 amendment sentence added.
+- [x] **E6 — E2EE coverage note: voice leg ≠ RPC leg** (review §6b).
       Relay E2EE protects the RPC leg only; the same content ("tell X to …",
       spoken + tts_request text) crosses the voice leg in clear. §6.7's "relay E2EE
       confirmed (ciphertext only)" acceptance test would pass while the voice leg
       is readable. Resolution follows A1: Tailscale (option A) → WireGuard covers
       the voice leg; plugin carrier (B2) → relay ciphertext covers it. Record in
       ADR-7 whichever way.
-      **blocked(A1)**
+      Done: 2026-11-27, coverage note recorded inside plan.md ADR-7 (option A:
+      WireGuard covers the voice leg).
 
 ## F. Bug-adjacent items from the review appendix (fold into M2 branch; "not architectural, unverified at runtime")
 
@@ -258,4 +278,12 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
 
 | Date | Item | Commit | Note |
 | --- | --- | --- | --- |
-| 2026-11-27 | tracker created | — | all items open |
+| 2026-11-27 | tracker created | 8ed7d76 | all items open |
+| 2026-11-27 | A1 complete | (this commit) | ADR-7: Tailscale, owner choice, revisitable |
+| 2026-11-27 | A2 complete | (this commit) | ADR-8: grammar in the app (delegated) |
+| 2026-11-27 | A3 complete | (this commit) | D1.4 resolved with evidence in plan.md |
+| 2026-11-27 | B2 partial | (this commit) | (b)+(d) done; (a) waits on M2 numbers, (c) on D1 probe |
+| 2026-11-27 | D4 skipped | (this commit) | superseded by A1 option A |
+| 2026-11-27 | E5 complete | (this commit) | ADR-5 amendment sentence |
+| 2026-11-27 | E6 complete | (this commit) | coverage note in ADR-7 |
+| 2026-11-27 | D5 added | (this commit) | Tailscale on NX1 — new follow-up item |

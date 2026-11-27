@@ -105,9 +105,9 @@ Measured facts (34 captured presses, `tools/post-root-setup.sh sidekey-log`):
 - **Output**: audio source decision, measured AEC quality, full-duplex go/no-go for barge-in.
 - **Fallback if AEC is unusable**: half-duplex with TTS ducking during capture (graceful degradation; barge-in becomes "press PTT to interrupt").
 
-### D1.4 — Paseo speech pipeline audit
-- Inventory what Paseo's integrated speech pipeline exposes: endpoints, auth, streaming vs batch, codecs, language support.
-- **Output**: API contract doc; decision whether it replaces a bespoke gateway.
+### D1.4 — Paseo speech pipeline audit — **RESOLVED 2026-11-27 (review §1 F2)**
+- ~~Inventory what Paseo's integrated speech pipeline exposes: endpoints, auth, streaming vs batch, codecs, language support.~~
+- **Output (evidence, Paseo v0.15.3)**: audio is base64 inside JSON; TTS is sent one whole segment at a time (≤260 chars), so first audio waits for the full segment; TTS exists only as an agent's `speak` tool, with no client-callable synthesis; voice mode sends transcripts to an agent — the opposite of the deterministic grammar. **Conclusion: the cascade (faster-whisper + Kokoro behind the gateway) is the v1 backend; the Paseo option is closed.**
 
 ### D1.5 — z.ai realtime speech model spike
 - Enumerate realtime / voice / multimodal streaming APIs available on the z.ai subscription (websocket audio-in/out, server VAD, barge-in semantics, cost/minute).
@@ -154,8 +154,10 @@ Key decisions to record as ADRs:
 - **ADR-2 Speech backend**: decided by D1.4/D1.5 numbers (Paseo pipeline vs z.ai realtime vs whisper+Kokoro cascade). The gateway interface is designed so backends are swappable behind one protocol.
 - **ADR-3 Code layout**: **standalone new repo** for the Alice app — repo `hey-alice` at `~/projects/hey-alice`. `xagent` (illegal-lion) stays a UI-first launcher; Alice is service-first — foreground service, audio engine, wake word, with a minimal status UI, not a card deck. Port the proven Paseo connection architecture (direct WS + relay E2EE, reconnect, agent-state model) into the new repo as adapted code, not shared Gradle modules — avoid coupling a headless assistant to the launcher's release cycle. Extract a shared connection library later only if divergence cost proves out. Alice connects to a single daemon connection in v1; multi-daemon remerge is launcher-specific and deferred.
 - **ADR-4 Transport codec**: PCM 16 kHz mono on WiFi; Opus 16–24 kbps before 4G field trials (radio-on-time matters on battery).
-- **ADR-5 Security**: device stores daemon bearer credentials in Android Keystore; full-disk encryption on; relay E2EE as first link, Tailscale second; gateway refuses unauthenticated streams.
-- **ADR-6 Side key / hold-to-talk** — **Status: Accepted (owner sign-off, 2026-11-21)**: side key = power key (`/dev/input/event0`, KEY_POWER); hold ≥ 500 ms → PTT via raw-event capture + RRO disabling power-menu long-press (owner approved losing the power menu); double press reserved. See §D1.2.
+- **ADR-5 Security**: device stores daemon bearer credentials in Android Keystore; full-disk encryption on; relay E2EE as first link, Tailscale second; gateway refuses unauthenticated streams. — **Amendment 2026-11-27 (review §6c)**: the app is root-equivalent (it execs `su` for ADR-6 PTT); anything it loads at runtime runs with that grant reachable. All models (ONNX VAD, wake word) are therefore bundled in the APK — no runtime fetch over an unauthenticated channel.
+- **ADR-6 Side key / hold-to-talk** — **Status: Accepted (owner sign-off, 2026-11-21)**: side key = power key (`/dev/input/event0`, KEY_POWER); hold ≥ 500 ms → PTT via raw-event capture + RRO disabling power-menu long-press (owner approved losing the power menu); double press reserved. See §D1.2. — **Deployed and verified on-device 2026-11-27** (static RRO via Magisk module v1.2; `mLongPressOnPowerBehavior=LONG_PRESS_POWER_NOTHING`; short press still toggles screen).
+- **ADR-7 Voice transport off the LAN** — **Status: Accepted (owner decision, 2026-11-27, revisitable)**: **Tailscale carries the voice gateway.** The NX1 joins the owner's tailnet and points at the server's tailscale IP; WireGuard then covers the voice leg off-LAN. Rationale: the Paseo relay carries only the daemon's own protocol, so "relay first" cannot apply to voice without the unproven daemon-plugin carrier (review §1 F1). The relay remains first for the **agent RPC leg** (M3). Revisit trigger: if Tailscale proves operationally annoying (login/holes-on-4G) or a real off-LAN requirement appears that Tailscale can't meet, the daemon-plugin carrier may be re-opened after a time-boxed spike of 50 msg/s relay throughput (tracker D4, skipped while this ADR stands). Coverage note (review §6b): relay E2EE protects the RPC leg only; this ADR is what covers the voice leg.
+- **ADR-8 Intent orchestration lives in the app** — **Status: Accepted (owner delegated to review recommendation, 2026-11-27)**: the M3 deterministic grammar (no LLM router) runs in the Android app, not the gateway. The app knows agent/session state, can speak optimistic acks immediately ("sent to X"), and the gateway stays a pure STT/TTS pipe. Includes a defined speech-queue policy (what happens when a spoken result arrives while TTS is already talking).
 
 ### Voice session protocol (one bidirectional WebSocket per session)
 
@@ -222,7 +224,7 @@ Intent routing (deterministic grammar first, no LLM router in v1):
 - "new session on Y" → create (wizard-free defaults) 
 - "archive X" → optimistic archive (launcher semantics)
 Notes-session defaults (tweakable): provider/model = owner's GLM default; the notes system prompt mandates the memos tool and one note per session.
-**Exit**: all five intents work over relay; spoken acks within budget; attention states shown on status UI.
+**Exit**: all five intents work end-to-end over the ADR-7 transport (voice via Tailscale, agent RPC via relay + Tailscale); spoken acks within budget; attention states shown on status UI.
 
 ### M4 — Wake word + always-on docked profile (≈1 week)
 openWakeWord always-on, VAD-gated capture window after wake, chime acks, docked power profile (screen dim, WiFi preferred, 4G standby).
@@ -243,7 +245,7 @@ Minimal status UI polish (agent dots, live transcript, error states), set compan
 1. **Latency**: log-segmented measurement of 20 utterances vs budget table (§4).
 2. **Wake word**: 24 h docked log; false accepts ≤ 1, misses ≤ 5% at 3 m.
 3. **Barge-in**: 10 interruptions mid-TTS at conversational volume; zero self-triggered false interrupts.
-4. **Mobility**: 4G-only session (WiFi off): note capture, status query, prompt send — all green.
+4. **Mobility**: 4G-only session (WiFi off, voice over Tailscale per ADR-7): note capture, status query, prompt send — all green.
 5. **Recovery**: kill daemon mid-session → spoken "reconnecting" → session resumes; device reboot → fully armed within 60 s, no touch.
 6. **Rollback**: mtkclient restore rehearsed; documented unroot procedure verified step-by-step.
 7. **Security**: credentials in Keystore, no plaintext secrets on disk, relay E2EE confirmed by relay-side capture (ciphertext only).
@@ -276,6 +278,11 @@ Resolved (2026-11-19):
 Still open:
 1. **Notes-session default model**: owner's GLM default proposed; confirm at M3.
 2. **GSI vs stock**: stock first per ADR-1; switch trigger = R3/R2 evidence, not preference — confirm acceptable.
+
+Resolved since (2026-11-27, architecture review):
+1. ~~Voice transport off LAN~~ → **ADR-7: Tailscale carries the gateway** (owner decision, revisitable; revisit trigger recorded).
+2. ~~Intent-orchestration location~~ → **ADR-8: deterministic grammar in the app** (owner delegated to review recommendation).
+3. ~~Speech backend Paseo option~~ → **D1.4 closed on evidence**; cascade is the v1 backend (D1.5 z.ai realtime stays open, scoped to M2 partial transcripts).
 
 Scaffolded 2026-11-19: repo `hey-alice` at `~/projects/hey-alice`; this document is its founding doc (`docs/plan.md`).
 
