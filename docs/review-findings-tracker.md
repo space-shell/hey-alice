@@ -162,12 +162,14 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
       backoff; UI only displays state.
       **blocked(nothing — lands with C2)**
 
-- [ ] **C7 — Extract the AEC test harness from AliceRuntime** (review §2).
+- [x] **C7 — Extract the AEC test harness from AliceRuntime** (review §2).
       runAecTest + fetchClip + capturePass are ~100 of AliceRuntime's 282 lines —
       test tooling living in the production runtime. Move to a separate class
       (e.g. debug/AecProbe.kt) behind a debug entry point.
       Acceptance: AliceRuntime carries no AEC-test code; the AEC test still works.
-      **blocked(nothing — lands with C2)**
+      Done: 2026-11-27, debug/AecProbe.kt (282→199 lines); F4's restore-on-done
+      folded into the probe's onRestore callback. Compiles; on-device run pending
+      owner (device locked at commit time).
 
 - [~] **C8 — Concurrency harness: fake gateway + automated barge-in/resume tests**
       (review §7.5, next-tier risks).
@@ -272,14 +274,17 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
 - [ ] **F2 — empty-text final leaves the app in RESPONDING**
       (AliceRuntime.kt:96–102). Fixed structurally by C5 (defined transitions);
       verify the empty-final → IDLE case in C5's tests.
-- [ ] **F3 — SideKeyWatcher.start() sets running=true after starting the reader
+- [x] **F3 — SideKeyWatcher.start() sets running=true after starting the reader
       thread whose loop is `while (running)`** (SideKeyWatcher.kt:50–57). The
       reader can exit before the flag is set → PTT dead until service restart.
       Set the flag before Thread.start().
-- [ ] **F4 — runAecTest leaves the engine stopped while connected=true**
+      Done: 2026-11-27, flag set before start(); error path also clears it.
+- [x] **F4 — runAecTest leaves the engine stopped while connected=true**
       (AliceRuntime.kt:254, 269–272). After an AEC test, PTT is dead until
       reconnect. Interim workaround (documented 2026-11-27): run PTT tests BEFORE
       the AEC test, or reconnect afterwards. Permanent fix lands with C2/C7.
+      Done: 2026-11-27, AecProbe.onRestore restarts the normal audio path
+      (startAudio(lastTtsSr)) after the passes — workaround no longer needed.
 
 ---
 
@@ -299,3 +304,6 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` complete · **blocked(..
 | 2026-11-27 | B1 complete | (this commit) | protocol.md v1 + server negotiation/resume/abort |
 | 2026-11-27 | C1 complete | (this commit) | lock split + writer queue + cancellable TTS; smoke 16/16, abort 1 ms |
 | 2026-11-27 | C8 progress | (this commit) | host-side smoke seeded; JVM side pending C2 |
+| 2026-11-27 | C7 complete | 7d57dfb | AecProbe.kt; runtime 282→199 lines |
+| 2026-11-27 | F3 complete | 7d57dfb | running flag before thread start |
+| 2026-11-27 | F4 complete | 7d57dfb | probe onRestore restarts audio path |
